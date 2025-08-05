@@ -1,5 +1,6 @@
 import pygame as pg
 import random
+import heapq
 
 TITLE = "Police Chase Grid"
 TILES_HORIZONTAL = 20
@@ -8,6 +9,62 @@ TILE_SIZE = 40
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 800
 NUM_MONEY_BAGS = 5
+
+
+def a_star_search(grid, start, goal):
+    """Perform A* search to find the shortest path from start to goal."""
+    rows, cols = len(grid), len(grid[0])
+    open_set = []
+    heapq.heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, goal)}
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+
+        if current == goal:
+            return reconstruct_path(came_from, current)
+
+        for neighbor in get_neighbors(current, rows, cols):
+            if grid[neighbor[0]][neighbor[1]] == 1:  # Wall
+                continue
+
+            tentative_g_score = g_score[current] + 1
+
+            if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                if neighbor not in [item[1] for item in open_set]:
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+    return []  # No path found
+
+
+def heuristic(a, b):
+    """Heuristic function for A* (Manhattan distance)."""
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def get_neighbors(pos, rows, cols):
+    """Get valid neighbors for a position."""
+    neighbors = []
+    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        r, c = pos[0] + dr, pos[1] + dc
+        if 0 <= r < rows and 0 <= c < cols:
+            neighbors.append((r, c))
+    return neighbors
+
+
+def reconstruct_path(came_from, current):
+    """Reconstruct the path from start to goal."""
+    path = []
+    while current in came_from:
+        path.append(current)
+        current = came_from[current]
+    path.reverse()
+    return path
 
 
 class Cop:
@@ -101,6 +158,7 @@ class Thief:
         self.playground = playground
         self.pos = self._generate_random_position()
         self.collected = 0
+        self.path = []
 
     def _generate_random_position(self):
         while True:
@@ -123,46 +181,29 @@ class Thief:
         if not self.playground.money_bags:
             return
 
-        # Find the closest money bag
         thief_x, thief_y = self.pos[0] // TILE_SIZE, self.pos[1] // TILE_SIZE
-        closest_bag = min(
-            self.playground.money_bags,
-            key=lambda bag: abs(bag[0] - thief_y) + abs(bag[1] - thief_x),
-        )
 
-        # Move one step towards the closest bag
-        bag_x, bag_y = closest_bag[1], closest_bag[0]
-        if thief_x < bag_x:
-            self.move("RIGHT")
-        elif thief_x > bag_x:
-            self.move("LEFT")
-        elif thief_y < bag_y:
-            self.move("DOWN")
-        elif thief_y > bag_y:
-            self.move("UP")
+        if not self.path:
+            # Find the closest money bag
+            closest_bag = min(
+                self.playground.money_bags,
+                key=lambda bag: abs(bag[0] - thief_y) + abs(bag[1] - thief_x),
+            )
+            self.path = a_star_search(
+                self.playground.grid, (thief_y, thief_x), closest_bag
+            )
 
-    def move(self, direction):
-        x, y = self.pos
-        if direction == "UP":
-            y -= TILE_SIZE
-        elif direction == "DOWN":
-            y += TILE_SIZE
-        elif direction == "LEFT":
-            x -= TILE_SIZE
-        elif direction == "RIGHT":
-            x += TILE_SIZE
+        if self.path:
+            next_step = self.path.pop(0)
+            self.pos = (
+                next_step[1] * TILE_SIZE + TILE_SIZE // 2,
+                next_step[0] * TILE_SIZE + TILE_SIZE // 2,
+            )
 
-        grid_x, grid_y = x // TILE_SIZE, y // TILE_SIZE
-
-        # Check for collision with walls
-        if 0 <= grid_y < TILES_VERTICAL and 0 <= grid_x < TILES_HORIZONTAL:
-            if self.playground.grid[grid_y][grid_x] == 0:  # Not a wall
-                self.pos = (x, y)
-
-                # Check for collecting a money bag
-                if (grid_y, grid_x) in self.playground.money_bags:
-                    self.playground.money_bags.remove((grid_y, grid_x))
-                    self.collected += 1
+            # Check for collecting a money bag
+            if next_step in self.playground.money_bags:
+                self.playground.money_bags.remove(next_step)
+                self.collected += 1
 
 
 class Game:
