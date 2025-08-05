@@ -72,6 +72,8 @@ class Cop:
         self.surface = surface
         self.playground = playground
         self.pos = self._generate_random_position()
+        self.image = pg.image.load("./assets/cop.png")
+        self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
 
     def _generate_random_position(self):
         while True:
@@ -84,9 +86,8 @@ class Cop:
                 return (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2)
 
     def draw(self):
-        pg.draw.rect(
-            self.surface, (0, 0, 255), (self.pos[0] - 20, self.pos[1] - 20, 40, 40)
-        )
+        x, y = self.pos[0] - TILE_SIZE // 2, self.pos[1] - TILE_SIZE // 2
+        self.surface.blit(self.image, (x, y))
 
     def move(self, direction):
         x, y = self.pos
@@ -159,6 +160,9 @@ class Thief:
         self.pos = self._generate_random_position()
         self.collected = 0
         self.path = []
+        self.image = pg.image.load("./assets/criminal.png")
+        self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
+        self.move_counter = 0  # Counter to control movement speed
 
     def _generate_random_position(self):
         while True:
@@ -171,14 +175,15 @@ class Thief:
                 return (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2)
 
     def draw(self):
-        pg.draw.rect(
-            self.surface,
-            (255, 0, 0),
-            (self.pos[0] - 20, self.pos[1] - 20, 40, 40),
-        )
+        x, y = self.pos[0] - TILE_SIZE // 2, self.pos[1] - TILE_SIZE // 2
+        self.surface.blit(self.image, (x, y))
 
     def move_to_bag(self):
         if not self.playground.money_bags:
+            return
+
+        self.move_counter += 1
+        if self.move_counter % 2 != 0:  # Move only on every second frame
             return
 
         thief_x, thief_y = self.pos[0] // TILE_SIZE, self.pos[1] // TILE_SIZE
