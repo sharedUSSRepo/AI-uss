@@ -4,11 +4,7 @@ import heapq
 import typer
 
 TITLE = "Police Chase Grid"
-TILES_HORIZONTAL = 20
-TILES_VERTICAL = 20
 TILE_SIZE = 40
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 800
 NUM_MONEY_BAGS = 5
 
 
@@ -96,17 +92,19 @@ def bfs_search(grid, start, goal):
 
 
 class Cop:
-    def __init__(self, surface, playground):
+    def __init__(self, surface, playground, grid_width, grid_height):
         self.surface = surface
         self.playground = playground
+        self.grid_width = grid_width
+        self.grid_height = grid_height
         self.pos = self._generate_random_position()
         self.image = pg.image.load("./assets/cop.png")
         self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
 
     def _generate_random_position(self):
         while True:
-            row = random.randint(0, TILES_VERTICAL - 1)
-            col = random.randint(0, TILES_HORIZONTAL - 1)
+            row = random.randint(0, self.grid_height - 1)
+            col = random.randint(0, self.grid_width - 1)
             if (
                 self.playground.grid[row][col] == 0
                 and (row, col) not in self.playground.money_bags
@@ -131,23 +129,25 @@ class Cop:
         grid_x, grid_y = x // TILE_SIZE, y // TILE_SIZE
 
         # Check for collision with walls
-        if 0 <= grid_y < TILES_VERTICAL and 0 <= grid_x < TILES_HORIZONTAL:
+        if 0 <= grid_y < self.grid_height and 0 <= grid_x < self.grid_width:
             if self.playground.grid[grid_y][grid_x] == 0:  # Not a wall
                 self.pos = (x, y)
 
 
 class Playground:
-    def __init__(self, surface):
+    def __init__(self, surface, grid_width, grid_height):
         self.surface = surface
-        self.grid = [[0 for _ in range(TILES_HORIZONTAL)] for _ in range(TILES_VERTICAL)]
+        self.grid_width = grid_width
+        self.grid_height = grid_height
+        self.grid = [[0 for _ in range(grid_width)] for _ in range(grid_height)]
         self.walls = []
         self.money_bags = []
         self.generate_walls()
         self.place_money_bags()
 
     def generate_walls(self):
-        for row in range(TILES_VERTICAL):
-            for col in range(TILES_HORIZONTAL):
+        for row in range(self.grid_height):
+            for col in range(self.grid_width):
                 if random.random() < 0.2:  # 20% chance to place a wall
                     self.grid[row][col] = 1
                     self.walls.append((row, col))
@@ -155,15 +155,15 @@ class Playground:
     def place_money_bags(self):
         placed = 0
         while placed < NUM_MONEY_BAGS:
-            row = random.randint(0, TILES_VERTICAL - 1)
-            col = random.randint(0, TILES_HORIZONTAL - 1)
+            row = random.randint(0, self.grid_height - 1)
+            col = random.randint(0, self.grid_width - 1)
             if self.grid[row][col] == 0 and (row, col) not in self.money_bags:
                 self.money_bags.append((row, col))
                 placed += 1
 
     def draw(self):
-        for row in range(TILES_VERTICAL):
-            for col in range(TILES_HORIZONTAL):
+        for row in range(self.grid_height):
+            for col in range(self.grid_width):
                 color = (40, 40, 40) if self.grid[row][col] == 1 else (0, 0, 0)
                 pg.draw.rect(
                     self.surface,
@@ -182,9 +182,11 @@ class Playground:
 
 
 class Thief:
-    def __init__(self, surface, playground, algorithm="a_star"):
+    def __init__(self, surface, playground, algorithm="a_star", grid_width=20, grid_height=20):
         self.surface = surface
         self.playground = playground
+        self.grid_width = grid_width
+        self.grid_height = grid_height
         self.pos = self._generate_random_position()
         self.collected = 0
         self.path = []
@@ -195,8 +197,8 @@ class Thief:
 
     def _generate_random_position(self):
         while True:
-            row = random.randint(0, TILES_VERTICAL - 1)
-            col = random.randint(0, TILES_HORIZONTAL - 1)
+            row = random.randint(0, self.grid_height - 1)
+            col = random.randint(0, self.grid_width - 1)
             if (
                 self.playground.grid[row][col] == 0
                 and (row, col) not in self.playground.money_bags
@@ -246,18 +248,22 @@ class Thief:
 
 
 class Game:
-    def __init__(self, algorithm="a_star"):
+    def __init__(self, algorithm="a_star", grid_width=20, grid_height=20):
         pg.init()
         self.clock = pg.time.Clock()
         pg.display.set_caption(TITLE)
-        self.surface = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.grid_width = grid_width
+        self.grid_height = grid_height
+        window_width = grid_width * TILE_SIZE
+        window_height = grid_height * TILE_SIZE
+        self.surface = pg.display.set_mode((window_width, window_height))
         self.loop = True
-        self.playground = Playground(self.surface)
+        self.playground = Playground(self.surface, grid_width, grid_height)
 
         # Ensure cop and thief do not overlap
         while True:
-            self.cop = Cop(self.surface, self.playground)
-            self.thief = Thief(self.surface, self.playground, algorithm)
+            self.cop = Cop(self.surface, self.playground, grid_width, grid_height)
+            self.thief = Thief(self.surface, self.playground, algorithm, grid_width, grid_height)
             if self.cop.pos != self.thief.pos:
                 break
 
@@ -307,14 +313,25 @@ class Game:
         return abs(cx - tx) < TILE_SIZE // 2 and abs(cy - ty) < TILE_SIZE // 2
 
 
-def main(algorithm: str = typer.Option("a_star", help="Pathfinding algorithm to use: 'bfs' or 'a_star'")):
-    """Police Chase Grid Game - Choose pathfinding algorithm for the thief."""
+def main(
+    algorithm: str = typer.Option("a_star", help="Pathfinding algorithm to use: 'bfs' or 'a_star'"),
+    grid: int = typer.Option(20, help="Grid size (creates a square grid of grid x grid)")
+):
+    """Police Chase Grid Game - Choose pathfinding algorithm and grid size for the game."""
     if algorithm not in ["bfs", "a_star"]:
         typer.echo(f"Error: Invalid algorithm '{algorithm}'. Choose 'bfs' or 'a_star'.")
         raise typer.Exit(1)
     
-    typer.echo(f"Starting game with {algorithm.upper()} algorithm...")
-    mygame = Game(algorithm)
+    if grid < 5:
+        typer.echo("Error: Grid size must be at least 5.")
+        raise typer.Exit(1)
+    
+    if grid > 50:
+        typer.echo("Error: Grid size must be at most 50.")
+        raise typer.Exit(1)
+    
+    typer.echo(f"Starting game with {algorithm.upper()} algorithm on a {grid}x{grid} grid...")
+    mygame = Game(algorithm, grid, grid)
     mygame.main()
 
 
