@@ -185,10 +185,11 @@ class Cop:
 
 
 class Playground:
-    def __init__(self, surface, grid_width, grid_height):
+    def __init__(self, surface, grid_width, grid_height, benchmark_mode=False):
         self.surface = surface
         self.grid_width = grid_width
         self.grid_height = grid_height
+        self.benchmark_mode = benchmark_mode
         self.grid = [[0 for _ in range(grid_width)] for _ in range(grid_height)]
         self.walls = []
         self.money_bags = []
@@ -263,9 +264,14 @@ class Thief:
         if not self.playground.money_bags:
             return
 
-        self.move_counter += 1
-        if self.move_counter % 2 != 0:  # Move only on every second frame
-            return
+        # In benchmark mode, move every frame for faster execution
+        if self.playground.benchmark_mode:
+            pass  # Move every frame in benchmark mode
+        else:
+            # Normal game mode: move only on every second frame
+            self.move_counter += 1
+            if self.move_counter % 2 != 0:
+                return
 
         thief_x, thief_y = self.pos[0] // TILE_SIZE, self.pos[1] // TILE_SIZE
 
@@ -305,20 +311,28 @@ class Game:
     def __init__(self, algorithm="a_star", grid_width=20, grid_height=20, benchmark=False):
         pg.init()
         self.clock = pg.time.Clock()
-        pg.display.set_caption(TITLE)
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.benchmark = benchmark
-        window_width = grid_width * TILE_SIZE
-        window_height = grid_height * TILE_SIZE
-        self.surface = pg.display.set_mode((window_width, window_height))
+        
+        if self.benchmark:
+            # In benchmark mode, create a minimal display
+            pg.display.set_mode((1, 1))
+            pg.display.set_caption("Benchmark Mode - Hidden")
+        else:
+            # Normal mode with full display
+            pg.display.set_caption(TITLE)
+            window_width = grid_width * TILE_SIZE
+            window_height = grid_height * TILE_SIZE
+            self.surface = pg.display.set_mode((window_width, window_height))
+        
         self.loop = True
-        self.playground = Playground(self.surface, grid_width, grid_height)
+        self.playground = Playground(None if benchmark else self.surface, grid_width, grid_height, benchmark)
 
         # Ensure cop and thief do not overlap (skip cop in benchmark mode)
         if self.benchmark:
             self.cop = None
-            self.thief = Thief(self.surface, self.playground, algorithm, grid_width, grid_height)
+            self.thief = Thief(None, self.playground, algorithm, grid_width, grid_height)
         else:
             while True:
                 self.cop = Cop(self.surface, self.playground, grid_width, grid_height)
@@ -332,10 +346,11 @@ class Game:
         pg.quit()
 
     def grid_loop(self):
-        self.surface.fill((0, 0, 0))
-        self.playground.draw()
-        self.thief.draw()
+        # Only render graphics in normal mode
         if not self.benchmark:
+            self.surface.fill((0, 0, 0))
+            self.playground.draw()
+            self.thief.draw()
             self.cop.draw()
 
         for event in pg.event.get():
@@ -369,8 +384,13 @@ class Game:
             print("You win! The cop caught the thief.")
             self.loop = False
 
-        pg.display.update()
-        self.clock.tick(10)
+        # Only update display in normal mode, with different frame rates
+        if not self.benchmark:
+            pg.display.update()
+            self.clock.tick(10)  # Normal game speed: 10 FPS
+        else:
+            # Ultra fast benchmark mode: no frame rate limit
+            self.clock.tick(0)  # Run as fast as possible
 
     def _cop_catches_thief(self):
         if self.benchmark or self.cop is None:
