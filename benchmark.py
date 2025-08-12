@@ -43,7 +43,7 @@ def parse_metrics_from_output(output):
     print(f"    Total metrics found: {len(metrics)}")
     return metrics
 
-def run_single_benchmark(algorithm, grid_size, timeout=60):
+def run_single_benchmark(algorithm, grid_size):
     """Run a single benchmark and return the output."""
     try:
         result = subprocess.run([
@@ -52,14 +52,11 @@ def run_single_benchmark(algorithm, grid_size, timeout=60):
             "--algorithm", algorithm, 
             "--grid", str(grid_size), 
             "--visual-benchmark"
-        ], capture_output=True, text=True, check=True, timeout=timeout)
+        ], capture_output=True, text=True, check=True)
         
         # Combine stdout and stderr as metrics might be in either
         combined_output = result.stdout + result.stderr
         return combined_output
-    except subprocess.TimeoutExpired:
-        print(f"    WARNING: Benchmark timed out after {timeout} seconds")
-        return None
     except subprocess.CalledProcessError as e:
         print(f"    ERROR: Benchmark failed with return code {e.returncode}")
         if e.stdout:
@@ -82,7 +79,7 @@ def run_benchmark_suite(algorithm="a_star", grid_size=20, iterations=2):
         
         output = run_single_benchmark(algorithm, grid_size)
         if output is None:
-            print(f"  Iteration {i+1} FAILED (timeout or error)")
+            print(f"  Iteration {i+1} FAILED (error)")
             failed_runs += 1
             continue
             

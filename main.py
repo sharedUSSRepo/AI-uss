@@ -17,7 +17,7 @@ def calculate_tile_size(grid_width, grid_height):
     return max(1, min(tile_size, 40))
 
 
-def a_star_search(grid, start, goal):
+def a_star_search(grid, start, goal, visualization_data=None):
     """Perform A* search to find the shortest path from start to goal."""
     start_time = time.time()
     expanded_nodes = 0
@@ -27,14 +27,29 @@ def a_star_search(grid, start, goal):
     came_from = {}
     g_score = {start: 0}
     f_score = {start: heuristic(start, goal)}
+    
+    # Visualization data
+    explored = set()
+    frontier = set()
 
     while open_set:
         _, current = heapq.heappop(open_set)
         expanded_nodes += 1
+        explored.add(current)
+        
+        # Update frontier (nodes in open_set)
+        frontier = set(item[1] for item in open_set)
 
         if current == goal:
             end_time = time.time()
             path = reconstruct_path(came_from, current)
+            
+            # Store visualization data if provided
+            if visualization_data is not None:
+                visualization_data['explored'] = explored.copy()
+                visualization_data['frontier'] = frontier.copy()
+                visualization_data['path'] = path.copy()
+            
             print(f"A* Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms")
             return path
 
@@ -52,6 +67,13 @@ def a_star_search(grid, start, goal):
                     heapq.heappush(open_set, (f_score[neighbor], neighbor))
 
     end_time = time.time()
+    
+    # Store visualization data even if no path found
+    if visualization_data is not None:
+        visualization_data['explored'] = explored.copy()
+        visualization_data['frontier'] = frontier.copy()
+        visualization_data['path'] = []
+    
     print(f"A* Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms, Path: Not found")
     return []  # No path found
 
@@ -81,7 +103,7 @@ def reconstruct_path(came_from, current):
     return path
 
 
-def bfs_search(grid, start, goal):
+def bfs_search(grid, start, goal, visualization_data=None):
     """Perform BFS search to find a path from start to goal."""
     from collections import deque
     
@@ -91,14 +113,29 @@ def bfs_search(grid, start, goal):
     queue = deque([start])
     visited = set([start])
     came_from = {}
+    
+    # Visualization data
+    explored = set()
+    frontier = set(queue)
 
     while queue:
         current = queue.popleft()
         expanded_nodes += 1
+        explored.add(current)
+        
+        # Update frontier (nodes currently in queue)
+        frontier = set(queue)
 
         if current == goal:
             end_time = time.time()
             path = reconstruct_path(came_from, current)
+            
+            # Store visualization data if provided
+            if visualization_data is not None:
+                visualization_data['explored'] = explored.copy()
+                visualization_data['frontier'] = frontier.copy()
+                visualization_data['path'] = path.copy()
+            
             print(f"BFS Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms")
             return path
 
@@ -112,11 +149,18 @@ def bfs_search(grid, start, goal):
                 queue.append(neighbor)
 
     end_time = time.time()
+    
+    # Store visualization data even if no path found
+    if visualization_data is not None:
+        visualization_data['explored'] = explored.copy()
+        visualization_data['frontier'] = frontier.copy()
+        visualization_data['path'] = []
+    
     print(f"BFS Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms, Path: Not found")
     return []  # No path found
 
 
-def dfs_search(grid, start, goal):
+def dfs_search(grid, start, goal, visualization_data=None):
     """Perform DFS search to find a path from start to goal."""
     start_time = time.time()
     expanded_nodes = 0
@@ -124,14 +168,29 @@ def dfs_search(grid, start, goal):
     stack = [start]
     visited = set([start])
     came_from = {}
+    
+    # Visualization data
+    explored = set()
+    frontier = set(stack)
 
     while stack:
         current = stack.pop()
         expanded_nodes += 1
+        explored.add(current)
+        
+        # Update frontier (nodes currently in stack)
+        frontier = set(stack)
 
         if current == goal:
             end_time = time.time()
             path = reconstruct_path(came_from, current)
+            
+            # Store visualization data if provided
+            if visualization_data is not None:
+                visualization_data['explored'] = explored.copy()
+                visualization_data['frontier'] = frontier.copy()
+                visualization_data['path'] = path.copy()
+            
             print(f"DFS Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms")
             return path
 
@@ -145,6 +204,13 @@ def dfs_search(grid, start, goal):
                 stack.append(neighbor)
 
     end_time = time.time()
+    
+    # Store visualization data even if no path found
+    if visualization_data is not None:
+        visualization_data['explored'] = explored.copy()
+        visualization_data['frontier'] = frontier.copy()
+        visualization_data['path'] = []
+    
     print(f"DFS Metrics - Expanded nodes: {expanded_nodes}, Time: {(end_time - start_time)*1000:.2f}ms, Path: Not found")
     return []  # No path found
 
@@ -203,6 +269,17 @@ class Playground:
         self.grid = [[0 for _ in range(grid_width)] for _ in range(grid_height)]
         self.walls = []
         self.money_bags = []
+        
+        # Visualization data for pathfinding
+        self.visualization_data = {
+            'explored': set(),
+            'frontier': set(),
+            'path': []
+        }
+        
+        # Trail data for showing thief's actual movement
+        self.trail = []  # List of (row, col) positions the thief has visited
+        
         self.generate_valid_maze()
 
     def generate_valid_maze(self):
@@ -289,6 +366,21 @@ class Playground:
         # Check if all money bags are reachable
         return len(reachable_bags) == len(self.money_bags)
 
+    def add_to_trail(self, row, col):
+        """Add a position to the thief's trail."""
+        if hasattr(self, 'show_visualization') and self.show_visualization:
+            position = (row, col)
+            if position not in self.trail:
+                self.trail.append(position)
+                # Limit trail length to prevent memory issues and visual clutter
+                if len(self.trail) > 100:
+                    self.trail.pop(0)
+    
+    def clear_trail(self):
+        """Clear the thief's trail when a coin is collected."""
+        if hasattr(self, 'show_visualization') and self.show_visualization:
+            self.trail.clear()
+
     def generate_walls(self):
         # Fixed wall density of 15% for all grid sizes
         for row in range(self.grid_height):
@@ -307,20 +399,43 @@ class Playground:
                 placed += 1
 
     def draw(self):
+        # First, draw the base grid (walls and empty spaces)
         for row in range(self.grid_height):
             for col in range(self.grid_width):
-                color = (40, 40, 40) if self.grid[row][col] == 1 else (0, 0, 0)
+                color = (40, 40, 40) if self.grid[row][col] == 1 else (0, 0, 0)  # Walls or empty
+                
+                # Only show visualization in visual benchmark mode
+                if self.benchmark_mode and hasattr(self, 'show_visualization') and self.show_visualization:
+                    # Check if this cell is part of the visualization
+                    if (row, col) in self.visualization_data.get('explored', set()):
+                        color = (80, 80, 80)  # Light gray for explored nodes
+                    elif (row, col) in self.visualization_data.get('frontier', set()):
+                        color = (0, 100, 200)  # Blue for frontier nodes
+                    elif (row, col) in [(p[0], p[1]) for p in self.visualization_data.get('path', [])]:
+                        color = (0, 200, 0)  # Green for final path
+                    
+                    # Show thief's trail (actual movement path)
+                    if (row, col) in self.trail:
+                        # Create a gradient effect for the trail (newer positions are brighter)
+                        trail_index = self.trail.index((row, col))
+                        trail_intensity = min(255, 100 + (trail_index * 10))  # Fade from dark to bright
+                        color = (trail_intensity, trail_intensity // 2, 0)  # Orange trail
+                    
+                    # Keep walls darker
+                    if self.grid[row][col] == 1:
+                        color = (40, 40, 40)  # Dark gray for walls
+                
                 pg.draw.rect(
                     self.surface,
                     color,
                     (col * self.tile_size, row * self.tile_size, self.tile_size, self.tile_size),
                 )
 
-        # Draw money bags
+        # Draw money bags on top
         for (row, col) in self.money_bags:
             pg.draw.circle(
                 self.surface,
-                (255, 215, 0),
+                (255, 215, 0),  # Gold color for money bags
                 (col * self.tile_size + self.tile_size // 2, row * self.tile_size + self.tile_size // 2),
                 max(5, self.tile_size // 4),  # Scale circle size with tile size
             )
@@ -349,6 +464,8 @@ class Thief:
                 self.playground.grid[row][col] == 0
                 and (row, col) not in self.playground.money_bags
             ):
+                # Add starting position to trail
+                self.playground.add_to_trail(row, col)
                 return (col * self.tile_size + self.tile_size // 2, row * self.tile_size + self.tile_size // 2)
 
     def draw(self):
@@ -376,17 +493,25 @@ class Thief:
                 self.playground.money_bags,
                 key=lambda bag: abs(bag[0] - thief_y) + abs(bag[1] - thief_x),
             )
+            
+            # Only collect visualization data in visual benchmark mode
+            visualization_data = None
+            if hasattr(self.playground, 'show_visualization') and self.playground.show_visualization:
+                # Clear previous visualization data
+                self.playground.visualization_data = {'explored': set(), 'frontier': set(), 'path': []}
+                visualization_data = self.playground.visualization_data
+            
             if self.algorithm == "a_star":
                 self.path = a_star_search(
-                    self.playground.grid, (thief_y, thief_x), closest_bag
+                    self.playground.grid, (thief_y, thief_x), closest_bag, visualization_data
                 )
             elif self.algorithm == "dfs":
                 self.path = dfs_search(
-                    self.playground.grid, (thief_y, thief_x), closest_bag
+                    self.playground.grid, (thief_y, thief_x), closest_bag, visualization_data
                 )
             else:  # Default to BFS
                 self.path = bfs_search(
-                    self.playground.grid, (thief_y, thief_x), closest_bag
+                    self.playground.grid, (thief_y, thief_x), closest_bag, visualization_data
                 )
             
             # If no path is found to the closest bag, try other bags
@@ -396,17 +521,25 @@ class Thief:
                     if bag == closest_bag:
                         continue  # Already tried this one
                     
+                    # Only collect visualization data in visual benchmark mode
+                    if hasattr(self.playground, 'show_visualization') and self.playground.show_visualization:
+                        # Clear previous visualization data for retry
+                        self.playground.visualization_data = {'explored': set(), 'frontier': set(), 'path': []}
+                        visualization_data = self.playground.visualization_data
+                    else:
+                        visualization_data = None
+                    
                     if self.algorithm == "a_star":
                         alternate_path = a_star_search(
-                            self.playground.grid, (thief_y, thief_x), bag
+                            self.playground.grid, (thief_y, thief_x), bag, visualization_data
                         )
                     elif self.algorithm == "dfs":
                         alternate_path = dfs_search(
-                            self.playground.grid, (thief_y, thief_x), bag
+                            self.playground.grid, (thief_y, thief_x), bag, visualization_data
                         )
                     else:  # Default to BFS
                         alternate_path = bfs_search(
-                            self.playground.grid, (thief_y, thief_x), bag
+                            self.playground.grid, (thief_y, thief_x), bag, visualization_data
                         )
                     
                     if alternate_path:
@@ -430,11 +563,19 @@ class Thief:
                 next_step[1] * self.tile_size + self.tile_size // 2,
                 next_step[0] * self.tile_size + self.tile_size // 2,
             )
+            
+            # Add current position to trail for visualization
+            self.playground.add_to_trail(next_step[0], next_step[1])
 
             # Check for collecting a money bag
             if next_step in self.playground.money_bags:
                 self.playground.money_bags.remove(next_step)
                 self.collected += 1
+                # Clear the trail when a coin is collected
+                self.playground.clear_trail()
+                # Also clear the path visualization for the next search
+                if hasattr(self.playground, 'show_visualization') and self.playground.show_visualization:
+                    self.playground.visualization_data = {'explored': set(), 'frontier': set(), 'path': []}
 
 
 class Game:
@@ -468,6 +609,10 @@ class Game:
         # Use surface for playground if we're showing visuals
         surface_for_playground = None if (benchmark and not visual_benchmark) else self.surface
         self.playground = Playground(surface_for_playground, grid_width, grid_height, benchmark, self.tile_size)
+        
+        # Enable visualization only in visual benchmark mode
+        if visual_benchmark:
+            self.playground.show_visualization = True
 
         # Ensure cop and thief do not overlap (skip cop in benchmark mode)
         if self.benchmark:
