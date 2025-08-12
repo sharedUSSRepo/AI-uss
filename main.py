@@ -545,7 +545,7 @@ class Game:
             return False
         cx, cy = self.cop.pos
         tx, ty = self.thief.pos
-        return abs(cx - tx) < TILE_SIZE // 2 and abs(cy - ty) < TILE_SIZE // 2
+        return abs(cx - tx) < self.tile_size // 2 and abs(cy - ty) < self.tile_size // 2
 
 
 def main(
