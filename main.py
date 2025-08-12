@@ -1,6 +1,7 @@
 import pygame as pg
 import random
 import heapq
+import typer
 
 TITLE = "Police Chase Grid"
 TILES_HORIZONTAL = 20
@@ -65,6 +66,33 @@ def reconstruct_path(came_from, current):
         current = came_from[current]
     path.reverse()
     return path
+
+
+def bfs_search(grid, start, goal):
+    """Perform BFS search to find a path from start to goal."""
+    from collections import deque
+    
+    rows, cols = len(grid), len(grid[0])
+    queue = deque([start])
+    visited = set([start])
+    came_from = {}
+
+    while queue:
+        current = queue.popleft()
+
+        if current == goal:
+            return reconstruct_path(came_from, current)
+
+        for neighbor in get_neighbors(current, rows, cols):
+            if grid[neighbor[0]][neighbor[1]] == 1:  # Wall
+                continue
+            
+            if neighbor not in visited:
+                visited.add(neighbor)
+                came_from[neighbor] = current
+                queue.append(neighbor)
+
+    return []  # No path found
 
 
 class Cop:
@@ -154,7 +182,7 @@ class Playground:
 
 
 class Thief:
-    def __init__(self, surface, playground):
+    def __init__(self, surface, playground, algorithm="a_star"):
         self.surface = surface
         self.playground = playground
         self.pos = self._generate_random_position()
@@ -163,6 +191,7 @@ class Thief:
         self.image = pg.image.load("./assets/criminal.png")
         self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
         self.move_counter = 0  # Counter to control movement speed
+        self.algorithm = algorithm
 
     def _generate_random_position(self):
         while True:
@@ -194,9 +223,14 @@ class Thief:
                 self.playground.money_bags,
                 key=lambda bag: abs(bag[0] - thief_y) + abs(bag[1] - thief_x),
             )
-            self.path = a_star_search(
-                self.playground.grid, (thief_y, thief_x), closest_bag
-            )
+            if self.algorithm == "a_star":
+                self.path = a_star_search(
+                    self.playground.grid, (thief_y, thief_x), closest_bag
+                )
+            else:  # Default to BFS
+                self.path = bfs_search(
+                    self.playground.grid, (thief_y, thief_x), closest_bag
+                )
 
         if self.path:
             next_step = self.path.pop(0)
@@ -212,7 +246,7 @@ class Thief:
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, algorithm="a_star"):
         pg.init()
         self.clock = pg.time.Clock()
         pg.display.set_caption(TITLE)
@@ -223,7 +257,7 @@ class Game:
         # Ensure cop and thief do not overlap
         while True:
             self.cop = Cop(self.surface, self.playground)
-            self.thief = Thief(self.surface, self.playground)
+            self.thief = Thief(self.surface, self.playground, algorithm)
             if self.cop.pos != self.thief.pos:
                 break
 
@@ -273,6 +307,16 @@ class Game:
         return abs(cx - tx) < TILE_SIZE // 2 and abs(cy - ty) < TILE_SIZE // 2
 
 
-if __name__ == "__main__":
-    mygame = Game()
+def main(algorithm: str = typer.Option("a_star", help="Pathfinding algorithm to use: 'bfs' or 'a_star'")):
+    """Police Chase Grid Game - Choose pathfinding algorithm for the thief."""
+    if algorithm not in ["bfs", "a_star"]:
+        typer.echo(f"Error: Invalid algorithm '{algorithm}'. Choose 'bfs' or 'a_star'.")
+        raise typer.Exit(1)
+    
+    typer.echo(f"Starting game with {algorithm.upper()} algorithm...")
+    mygame = Game(algorithm)
     mygame.main()
+
+
+if __name__ == "__main__":
+    typer.run(main)
