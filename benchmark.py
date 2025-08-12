@@ -113,7 +113,12 @@ def run_benchmark_suite(algorithm="a_star", grid_size=20, iterations=2):
 def save_to_csv(metrics, algorithm, grid_size, iterations):
     """Save metrics to a CSV file."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"./benchmarks/benchmark_{algorithm}_{grid_size}x{grid_size}_{iterations}runs_{timestamp}.csv"
+    
+    # Create benchmarks directory if it doesn't exist
+    benchmarks_dir = "./benchmarks"
+    os.makedirs(benchmarks_dir, exist_ok=True)
+    
+    filename = f"{benchmarks_dir}/benchmark_{algorithm}_{grid_size}x{grid_size}_{iterations}runs_{timestamp}.csv"
 
     fieldnames = ['run_number', 'algorithm', 'grid_size', 'expanded_nodes', 'time_ms']
     
