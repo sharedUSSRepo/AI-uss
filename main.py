@@ -5,8 +5,16 @@ import typer
 import time
 
 TITLE = "Police Chase Grid"
-TILE_SIZE = 40
+TARGET_WINDOW_SIZE = 1000  # Target window size in pixels
 NUM_MONEY_BAGS = 5
+
+def calculate_tile_size(grid_width, grid_height):
+    """Calculate tile size to fit the grid in the target window size."""
+    # Use the larger dimension to ensure the window fits
+    max_dimension = max(grid_width, grid_height)
+    tile_size = TARGET_WINDOW_SIZE // max_dimension
+    # Ensure minimum tile size of 1 pixel and maximum of 40 pixels
+    return max(1, min(tile_size, 40))
 
 
 def a_star_search(grid, start, goal):
@@ -142,14 +150,15 @@ def dfs_search(grid, start, goal):
 
 
 class Cop:
-    def __init__(self, surface, playground, grid_width, grid_height):
+    def __init__(self, surface, playground, grid_width, grid_height, tile_size=40):
         self.surface = surface
         self.playground = playground
         self.grid_width = grid_width
         self.grid_height = grid_height
+        self.tile_size = tile_size
         self.pos = self._generate_random_position()
         self.image = pg.image.load("./assets/cop.png")
-        self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
+        self.image = pg.transform.scale(self.image, (self.tile_size, self.tile_size))
 
     def _generate_random_position(self):
         while True:
@@ -159,24 +168,24 @@ class Cop:
                 self.playground.grid[row][col] == 0
                 and (row, col) not in self.playground.money_bags
             ):
-                return (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2)
+                return (col * self.tile_size + self.tile_size // 2, row * self.tile_size + self.tile_size // 2)
 
     def draw(self):
-        x, y = self.pos[0] - TILE_SIZE // 2, self.pos[1] - TILE_SIZE // 2
+        x, y = self.pos[0] - self.tile_size // 2, self.pos[1] - self.tile_size // 2
         self.surface.blit(self.image, (x, y))
 
     def move(self, direction):
         x, y = self.pos
         if direction == "UP":
-            y -= TILE_SIZE
+            y -= self.tile_size
         elif direction == "DOWN":
-            y += TILE_SIZE
+            y += self.tile_size
         elif direction == "LEFT":
-            x -= TILE_SIZE
+            x -= self.tile_size
         elif direction == "RIGHT":
-            x += TILE_SIZE
+            x += self.tile_size
 
-        grid_x, grid_y = x // TILE_SIZE, y // TILE_SIZE
+        grid_x, grid_y = x // self.tile_size, y // self.tile_size
 
         # Check for collision with walls
         if 0 <= grid_y < self.grid_height and 0 <= grid_x < self.grid_width:
@@ -185,21 +194,106 @@ class Cop:
 
 
 class Playground:
-    def __init__(self, surface, grid_width, grid_height, benchmark_mode=False):
+    def __init__(self, surface, grid_width, grid_height, benchmark_mode=False, tile_size=40):
         self.surface = surface
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.benchmark_mode = benchmark_mode
+        self.tile_size = tile_size
         self.grid = [[0 for _ in range(grid_width)] for _ in range(grid_height)]
         self.walls = []
         self.money_bags = []
-        self.generate_walls()
-        self.place_money_bags()
+        self.generate_valid_maze()
 
-    def generate_walls(self):
+    def generate_valid_maze(self):
+        """Generate a maze and ensure all money bags are reachable."""
+        grid_size = self.grid_width * self.grid_height
+        
+        # Reduce validation attempts for very large grids to improve performance
+        if grid_size >= 1000000:  # 1000x1000 or larger
+            max_attempts = 3
+        elif grid_size >= 100000:  # 316x316 or larger
+            max_attempts = 5
+        else:
+            max_attempts = 10
+            
+        for attempt in range(max_attempts):
+            # Clear previous state
+            self.grid = [[0 for _ in range(self.grid_width)] for _ in range(self.grid_height)]
+            self.walls = []
+            self.money_bags = []
+            
+            # Generate walls and money bags
+            self.generate_walls()
+            self.place_money_bags()
+            
+            # Check if maze is solvable
+            if self.is_maze_solvable():
+                if not self.benchmark_mode:
+                    print(f"Valid maze generated on attempt {attempt + 1}")
+                break
+            elif not self.benchmark_mode:
+                print(f"Attempt {attempt + 1}: Maze unsolvable, regenerating...")
+        else:
+            # If we couldn't generate a valid maze, create a minimal one with no walls
+            if not self.benchmark_mode:
+                print("Warning: Creating maze with minimal walls to ensure solvability")
+            self.grid = [[0 for _ in range(self.grid_width)] for _ in range(self.grid_height)]
+            self.walls = []
+            self.money_bags = []
+            self.place_money_bags()
+
+    def is_maze_solvable(self):
+        """Check if all money bags are reachable using BFS from any valid starting position."""
+        if not self.money_bags:
+            return True
+        
+        # Find a valid starting position (any non-wall cell)
+        start_pos = None
         for row in range(self.grid_height):
             for col in range(self.grid_width):
-                if random.random() < 0.2:  # 20% chance to place a wall
+                if self.grid[row][col] == 0:  # Not a wall
+                    start_pos = (row, col)
+                    break
+            if start_pos:
+                break
+        
+        if not start_pos:
+            return False  # No valid starting position
+        
+        # Use BFS to check reachability of all money bags
+        visited = set()
+        queue = [start_pos]
+        visited.add(start_pos)
+        reachable_bags = set()
+        
+        while queue:
+            current_row, current_col = queue.pop(0)
+            
+            # Check if current position has a money bag
+            if (current_row, current_col) in self.money_bags:
+                reachable_bags.add((current_row, current_col))
+            
+            # Explore neighbors
+            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                new_row, new_col = current_row + dr, current_col + dc
+                
+                if (0 <= new_row < self.grid_height and 
+                    0 <= new_col < self.grid_width and 
+                    (new_row, new_col) not in visited and 
+                    self.grid[new_row][new_col] == 0):  # Not a wall
+                    
+                    visited.add((new_row, new_col))
+                    queue.append((new_row, new_col))
+        
+        # Check if all money bags are reachable
+        return len(reachable_bags) == len(self.money_bags)
+
+    def generate_walls(self):
+        # Fixed wall density of 15% for all grid sizes
+        for row in range(self.grid_height):
+            for col in range(self.grid_width):
+                if random.random() < 0.15:  # 15% chance to place a wall
                     self.grid[row][col] = 1
                     self.walls.append((row, col))
 
@@ -219,7 +313,7 @@ class Playground:
                 pg.draw.rect(
                     self.surface,
                     color,
-                    (col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                    (col * self.tile_size, row * self.tile_size, self.tile_size, self.tile_size),
                 )
 
         # Draw money bags
@@ -227,22 +321,23 @@ class Playground:
             pg.draw.circle(
                 self.surface,
                 (255, 215, 0),
-                (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2),
-                10,
+                (col * self.tile_size + self.tile_size // 2, row * self.tile_size + self.tile_size // 2),
+                max(5, self.tile_size // 4),  # Scale circle size with tile size
             )
 
 
 class Thief:
-    def __init__(self, surface, playground, algorithm="a_star", grid_width=20, grid_height=20):
+    def __init__(self, surface, playground, algorithm="a_star", grid_width=20, grid_height=20, tile_size=40):
         self.surface = surface
         self.playground = playground
         self.grid_width = grid_width
         self.grid_height = grid_height
+        self.tile_size = tile_size
         self.pos = self._generate_random_position()
         self.collected = 0
         self.path = []
         self.image = pg.image.load("./assets/criminal.png")
-        self.image = pg.transform.scale(self.image, (TILE_SIZE, TILE_SIZE))
+        self.image = pg.transform.scale(self.image, (self.tile_size, self.tile_size))
         self.move_counter = 0  # Counter to control movement speed
         self.algorithm = algorithm
 
@@ -254,10 +349,10 @@ class Thief:
                 self.playground.grid[row][col] == 0
                 and (row, col) not in self.playground.money_bags
             ):
-                return (col * TILE_SIZE + TILE_SIZE // 2, row * TILE_SIZE + TILE_SIZE // 2)
+                return (col * self.tile_size + self.tile_size // 2, row * self.tile_size + self.tile_size // 2)
 
     def draw(self):
-        x, y = self.pos[0] - TILE_SIZE // 2, self.pos[1] - TILE_SIZE // 2
+        x, y = self.pos[0] - self.tile_size // 2, self.pos[1] - self.tile_size // 2
         self.surface.blit(self.image, (x, y))
 
     def move_to_bag(self):
@@ -273,7 +368,7 @@ class Thief:
             if self.move_counter % 2 != 0:
                 return
 
-        thief_x, thief_y = self.pos[0] // TILE_SIZE, self.pos[1] // TILE_SIZE
+        thief_x, thief_y = self.pos[0] // self.tile_size, self.pos[1] // self.tile_size
 
         if not self.path:
             # Find the closest money bag
@@ -293,12 +388,47 @@ class Thief:
                 self.path = bfs_search(
                     self.playground.grid, (thief_y, thief_x), closest_bag
                 )
+            
+            # If no path is found to the closest bag, try other bags
+            if not self.path:
+                # Try all other money bags to see if any are reachable
+                for bag in self.playground.money_bags:
+                    if bag == closest_bag:
+                        continue  # Already tried this one
+                    
+                    if self.algorithm == "a_star":
+                        alternate_path = a_star_search(
+                            self.playground.grid, (thief_y, thief_x), bag
+                        )
+                    elif self.algorithm == "dfs":
+                        alternate_path = dfs_search(
+                            self.playground.grid, (thief_y, thief_x), bag
+                        )
+                    else:  # Default to BFS
+                        alternate_path = bfs_search(
+                            self.playground.grid, (thief_y, thief_x), bag
+                        )
+                    
+                    if alternate_path:
+                        self.path = alternate_path
+                        break
+                
+                # If still no path found to any bag, the game is unsolvable
+                if not self.path:
+                    print("WARNING: No path found to any money bag! Game is unsolvable.")
+                    print("This could happen if:")
+                    print("- Thief is completely surrounded by walls")
+                    print("- All money bags are unreachable")
+                    print("- Grid generation created an unsolvable maze")
+                    # Force end the game by declaring the thief can't continue
+                    self.playground.money_bags.clear()
+                    return
 
         if self.path:
             next_step = self.path.pop(0)
             self.pos = (
-                next_step[1] * TILE_SIZE + TILE_SIZE // 2,
-                next_step[0] * TILE_SIZE + TILE_SIZE // 2,
+                next_step[1] * self.tile_size + self.tile_size // 2,
+                next_step[0] * self.tile_size + self.tile_size // 2,
             )
 
             # Check for collecting a money bag
@@ -308,35 +438,46 @@ class Thief:
 
 
 class Game:
-    def __init__(self, algorithm="a_star", grid_width=20, grid_height=20, benchmark=False):
+    def __init__(self, algorithm="a_star", grid_width=20, grid_height=20, benchmark=False, visual_benchmark=False):
         pg.init()
         self.clock = pg.time.Clock()
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.benchmark = benchmark
+        self.visual_benchmark = visual_benchmark
         
-        if self.benchmark:
+        # Calculate dynamic tile size
+        self.tile_size = calculate_tile_size(grid_width, grid_height)
+        
+        if self.benchmark and not self.visual_benchmark:
             # In benchmark mode, create a minimal display
             pg.display.set_mode((1, 1))
             pg.display.set_caption("Benchmark Mode - Hidden")
         else:
-            # Normal mode with full display
-            pg.display.set_caption(TITLE)
-            window_width = grid_width * TILE_SIZE
-            window_height = grid_height * TILE_SIZE
+            # Normal mode or visual benchmark with full display
+            window_width = grid_width * self.tile_size
+            window_height = grid_height * self.tile_size
             self.surface = pg.display.set_mode((window_width, window_height))
+            if self.visual_benchmark:
+                pg.display.set_caption("Visual Benchmark Mode")
+            else:
+                pg.display.set_caption(TITLE)
         
         self.loop = True
-        self.playground = Playground(None if benchmark else self.surface, grid_width, grid_height, benchmark)
+        
+        # Use surface for playground if we're showing visuals
+        surface_for_playground = None if (benchmark and not visual_benchmark) else self.surface
+        self.playground = Playground(surface_for_playground, grid_width, grid_height, benchmark, self.tile_size)
 
         # Ensure cop and thief do not overlap (skip cop in benchmark mode)
         if self.benchmark:
             self.cop = None
-            self.thief = Thief(None, self.playground, algorithm, grid_width, grid_height)
+            thief_surface = None if not self.visual_benchmark else self.surface
+            self.thief = Thief(thief_surface, self.playground, algorithm, grid_width, grid_height, self.tile_size)
         else:
             while True:
-                self.cop = Cop(self.surface, self.playground, grid_width, grid_height)
-                self.thief = Thief(self.surface, self.playground, algorithm, grid_width, grid_height)
+                self.cop = Cop(self.surface, self.playground, grid_width, grid_height, self.tile_size)
+                self.thief = Thief(self.surface, self.playground, algorithm, grid_width, grid_height, self.tile_size)
                 if self.cop.pos != self.thief.pos:
                     break
 
@@ -346,12 +487,13 @@ class Game:
         pg.quit()
 
     def grid_loop(self):
-        # Only render graphics in normal mode
-        if not self.benchmark:
+        # Render graphics in normal mode or visual benchmark mode
+        if not self.benchmark or self.visual_benchmark:
             self.surface.fill((0, 0, 0))
             self.playground.draw()
             self.thief.draw()
-            self.cop.draw()
+            if self.cop:  # Only draw cop if it exists (not in benchmark mode)
+                self.cop.draw()
 
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -384,12 +526,18 @@ class Game:
             print("You win! The cop caught the thief.")
             self.loop = False
 
-        # Only update display in normal mode, with different frame rates
+        # Update display and frame rate based on mode
         if not self.benchmark:
+            # Normal game mode
             pg.display.update()
             self.clock.tick(10)  # Normal game speed: 10 FPS
+        elif self.visual_benchmark:
+            # Visual benchmark mode - slower than headless but visible
+            pg.display.update()
+            self.clock.tick(60)  # Fast but visible: 60 FPS
         else:
-            # Ultra fast benchmark mode: no frame rate limit
+            # Headless benchmark mode - ultra fast
+            self.clock.tick(0)  # Run as fast as possible
             self.clock.tick(0)  # Run as fast as possible
 
     def _cop_catches_thief(self):
@@ -403,7 +551,8 @@ class Game:
 def main(
     algorithm: str = typer.Option("a_star", help="Pathfinding algorithm to use: 'bfs', 'dfs', or 'a_star'"),
     grid: int = typer.Option(20, help="Grid size (creates a square grid of grid x grid)"),
-    benchmark: bool = typer.Option(False, help="Benchmark mode - disables cop spawning for pure pathfinding testing")
+    benchmark: bool = typer.Option(False, help="Benchmark mode - disables cop spawning for pure pathfinding testing"),
+    visual_benchmark: bool = typer.Option(False, help="Visual benchmark mode - shows window during benchmark")
 ):
     """Police Chase Grid Game - Choose pathfinding algorithm and grid size for the game."""
     if algorithm not in ["bfs", "dfs", "a_star"]:
@@ -414,17 +563,22 @@ def main(
         typer.echo("Error: Grid size must be at least 5.")
         raise typer.Exit(1)
     
-    if grid > 50:
-        typer.echo("Error: Grid size mu be at most 50.")
+    if grid > 1000:
+        typer.echo("Error: Grid size must be at most 1000.")
         raise typer.Exit(1)
     
-    if benchmark:
+    # If visual_benchmark is True, also enable benchmark mode
+    if visual_benchmark:
+        benchmark = True
+        typer.echo(f"Starting VISUAL BENCHMARK mode with {algorithm.upper()} algorithm on a {grid}x{grid} grid...")
+        typer.echo("Note: Cop is disabled. Window will show thief pathfinding.")
+    elif benchmark:
         typer.echo(f"Starting BENCHMARK mode with {algorithm.upper()} algorithm on a {grid}x{grid} grid...")
         typer.echo("Note: Cop is disabled. Only thief pathfinding will be tested.")
     else:
         typer.echo(f"Starting game with {algorithm.upper()} algorithm on a {grid}x{grid} grid...")
     
-    mygame = Game(algorithm, grid, grid, benchmark)
+    mygame = Game(algorithm, grid, grid, benchmark, visual_benchmark)
     mygame.main()
 
 

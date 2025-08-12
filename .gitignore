@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python,osx
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,osx
 
+### PROJECT ###
+benchmarks/
+
 ### OSX ###
 # General
 .DS_Store
