@@ -26,7 +26,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 2. Clone the repository:
 ```bash
 git clone https://github.com/SharedUSSRepo/AI-uss
-cd AI
+cd AI-uss
 ```
 
 3. Install dependencies:
