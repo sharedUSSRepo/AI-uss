@@ -11,8 +11,28 @@ import sys
 import csv
 import re
 import os
+import json
 import typer
 from datetime import datetime
+
+def load_benchmark_seeds():
+    """Load the predefined seeds from the JSON file."""
+    try:
+        with open("benchmark_seeds.json", "r") as f:
+            data = json.load(f)
+            seeds = data["seeds"]
+            print(f"Loaded {len(seeds)} benchmark seeds from benchmark_seeds.json")
+            return seeds
+    except FileNotFoundError:
+        print("ERROR: benchmark_seeds.json file not found!")
+        print("Please ensure benchmark_seeds.json is in the same directory as this script.")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in benchmark_seeds.json: {e}")
+        return None
+    except KeyError:
+        print("ERROR: benchmark_seeds.json must contain a 'seeds' array")
+        return None
 
 def parse_metrics_from_output(output):
     """Parse algorithm metrics from the game output."""
@@ -43,14 +63,15 @@ def parse_metrics_from_output(output):
     print(f"    Total metrics found: {len(metrics)}")
     return metrics
 
-def run_single_benchmark(algorithm, grid_size):
-    """Run a single benchmark and return the output."""
+def run_single_benchmark(algorithm, grid_size, seed):
+    """Run a single benchmark with the given seed and return the output."""
     try:
         result = subprocess.run([
             sys.executable, 
             "main.py", 
             "--algorithm", algorithm, 
-            "--grid", str(grid_size), 
+            "--grid", str(grid_size),
+            "--seed", str(seed),
             "--visual-benchmark"
         ], capture_output=True, text=True, check=True)
         
@@ -69,15 +90,29 @@ def run_benchmark_suite(algorithm="a_star", grid_size=20, iterations=2):
     """Run the benchmark test multiple times and save results to CSV."""
     print(f"Starting benchmark suite...")
     print(f"Algorithm: {algorithm}, Grid Size: {grid_size}x{grid_size}, Iterations: {iterations}")
+    
+    # Load predefined seeds
+    seeds = load_benchmark_seeds()
+    if seeds is None:
+        print("Failed to load seeds. Exiting.")
+        return
+    
+    if iterations > len(seeds):
+        print(f"WARNING: Requested {iterations} iterations but only {len(seeds)} seeds available.")
+        print(f"Using all {len(seeds)} seeds.")
+        iterations = len(seeds)
+    
+    print(f"Using seeds: {seeds[:iterations]}")
     print("-" * 80)
     
     all_metrics = []
     failed_runs = 0
     
     for i in range(iterations):
-        print(f"Running iteration {i+1}/{iterations}...")
+        current_seed = seeds[i]  # Use seeds sequentially starting from the first
+        print(f"Running iteration {i+1}/{iterations} with seed {current_seed}...")
         
-        output = run_single_benchmark(algorithm, grid_size)
+        output = run_single_benchmark(algorithm, grid_size, current_seed)
         if output is None:
             print(f"  Iteration {i+1} FAILED (error)")
             failed_runs += 1
@@ -90,6 +125,7 @@ def run_benchmark_suite(algorithm="a_star", grid_size=20, iterations=2):
         for metric in run_metrics:
             metric['run_number'] = i + 1
             metric['grid_size'] = grid_size
+            metric['seed'] = current_seed
             all_metrics.append(metric)
         
         print(f"  Iteration {i+1} completed - Found {len(run_metrics)} metrics")
@@ -120,7 +156,7 @@ def save_to_csv(metrics, algorithm, grid_size, iterations):
     
     filename = f"{benchmarks_dir}/benchmark_{algorithm}_{grid_size}x{grid_size}_{iterations}runs_{timestamp}.csv"
 
-    fieldnames = ['run_number', 'algorithm', 'grid_size', 'expanded_nodes', 'time_ms']
+    fieldnames = ['run_number', 'algorithm', 'grid_size', 'seed', 'expanded_nodes', 'time_ms']
     
     with open(filename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -181,9 +217,21 @@ def main(
         typer.echo("Error: Number of iterations must be at least 1.")
         raise typer.Exit(1)
     
-    if iterations > 100:
-        typer.echo("Error: Number of iterations must be at most 100.")
+    # Load seeds to check availability
+    seeds = load_benchmark_seeds()
+    if seeds is None:
         raise typer.Exit(1)
+    
+    max_iterations = len(seeds)
+    if iterations > max_iterations:
+        typer.echo(f"Warning: Requested {iterations} iterations but only {max_iterations} seeds available.")
+        typer.echo(f"Will run {max_iterations} iterations instead.")
+        iterations = max_iterations
+    
+    # Remove the old arbitrary limit since we're now limited by available seeds
+    # if iterations > 100:
+    #     typer.echo("Error: Number of iterations must be at most 100.")
+    #     raise typer.Exit(1)
     
     # Performance warning for large grids
     grid_size = grid * grid

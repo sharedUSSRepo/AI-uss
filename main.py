@@ -579,7 +579,11 @@ class Thief:
 
 
 class Game:
-    def __init__(self, algorithm="a_star", grid_width=20, grid_height=20, benchmark=False, visual_benchmark=False):
+    def __init__(self, algorithm="a_star", grid_width=20, grid_height=20, benchmark=False, visual_benchmark=False, seed=None):
+        # Set random seed if provided before any pygame initialization
+        if seed is not None:
+            random.seed(seed)
+            
         pg.init()
         self.clock = pg.time.Clock()
         self.grid_width = grid_width
@@ -697,7 +701,8 @@ def main(
     algorithm: str = typer.Option("a_star", help="Pathfinding algorithm to use: 'bfs', 'dfs', or 'a_star'"),
     grid: int = typer.Option(20, help="Grid size (creates a square grid of grid x grid)"),
     benchmark: bool = typer.Option(False, help="Benchmark mode - disables cop spawning for pure pathfinding testing"),
-    visual_benchmark: bool = typer.Option(False, help="Visual benchmark mode - shows window during benchmark")
+    visual_benchmark: bool = typer.Option(False, help="Visual benchmark mode - shows window during benchmark"),
+    seed: int = typer.Option(None, help="Random seed for reproducible map generation (optional)")
 ):
     """Police Chase Grid Game - Choose pathfinding algorithm and grid size for the game."""
     if algorithm not in ["bfs", "dfs", "a_star"]:
@@ -712,6 +717,12 @@ def main(
         typer.echo("Error: Grid size must be at most 1000.")
         raise typer.Exit(1)
     
+    # Set random seed if provided
+    if seed is not None:
+        random.seed(seed)
+        if not benchmark:
+            typer.echo(f"Using random seed: {seed}")
+    
     # If visual_benchmark is True, also enable benchmark mode
     if visual_benchmark:
         benchmark = True
@@ -723,7 +734,7 @@ def main(
     else:
         typer.echo(f"Starting game with {algorithm.upper()} algorithm on a {grid}x{grid} grid...")
     
-    mygame = Game(algorithm, grid, grid, benchmark, visual_benchmark)
+    mygame = Game(algorithm, grid, grid, benchmark, visual_benchmark, seed)
     mygame.main()
 
 
