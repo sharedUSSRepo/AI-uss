@@ -27,7 +27,30 @@ class TicTacToeGame {
             this.treeVisualizer.setNodeClickCallback((pathData) => {
                 this.showPathPreview(pathData);
             });
+            
+            // Set initial display options
+            const showFullTree = document.getElementById('showFullTree').checked;
+            const showNodeValues = document.getElementById('showNodeValues').checked;
+            this.treeVisualizer.setDisplayOptions(showFullTree, showNodeValues);
         }, 100);
+    }
+    
+    /**
+     * Regenerate tree visualization with current AI result
+     */
+    regenerateTreeVisualization() {
+        if (this.treeVisualizer && this.lastAIResult) {
+            this.treeVisualizer.visualizeTree(
+                this.lastAIResult.treeData.board, 
+                this.lastAIResult.treeData.aiPlayer, 
+                3
+            );
+            
+            // Re-highlight the chosen path after a short delay
+            setTimeout(() => {
+                this.treeVisualizer.highlightBestPath(this.lastAIResult.treeData.bestMove);
+            }, 200);
+        }
     }
     
     /**
@@ -127,6 +150,23 @@ class TicTacToeGame {
             this.clearPathPreview();
         });
         
+        // Tree visualization options
+        document.getElementById('showFullTree').addEventListener('change', (e) => {
+            if (this.treeVisualizer) {
+                const showNodeValues = document.getElementById('showNodeValues').checked;
+                this.treeVisualizer.setDisplayOptions(e.target.checked, showNodeValues);
+                this.regenerateTreeVisualization();
+            }
+        });
+        
+        document.getElementById('showNodeValues').addEventListener('change', (e) => {
+            if (this.treeVisualizer) {
+                const showFullTree = document.getElementById('showFullTree').checked;
+                this.treeVisualizer.setDisplayOptions(showFullTree, e.target.checked);
+                this.treeVisualizer.redraw();
+            }
+        });
+        
         document.querySelectorAll('.cell').forEach(cell => {
             cell.addEventListener('click', (e) => this.handleCellClick(e));
         });
@@ -136,6 +176,7 @@ class TicTacToeGame {
         this.board = Array(9).fill(null);
         this.currentPlayer = 'X';
         this.gameActive = true;
+        this.lastAIResult = null; // Clear stored AI result
         this.updateDisplay();
         this.updateGameStatus('Game started! Make your move.');
         
@@ -178,6 +219,7 @@ class TicTacToeGame {
         if (!this.gameActive) return;
         
         const aiResult = this.ai.getMove(this.board);
+        this.lastAIResult = aiResult; // Store for regenerating tree
         
         // Update debug info
         this.updateDebugInfo(aiResult.debugInfo);

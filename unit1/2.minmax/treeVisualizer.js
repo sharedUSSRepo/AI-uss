@@ -23,6 +23,8 @@ class MinimaxTreeVisualizer {
         // Click interaction properties
         this.selectedPath = null;
         this.onNodeClick = null; // Callback for when a node is clicked
+        this.showFullTree = false; // Option to show unpruned tree
+        this.showNodeValues = true; // Option to show node values
         
         // Colors for different node types
         this.colors = {
@@ -37,6 +39,14 @@ class MinimaxTreeVisualizer {
         };
         
         this.initializeControls();
+    }
+    
+    /**
+     * Set options for tree display
+     */
+    setDisplayOptions(showFullTree, showNodeValues) {
+        this.showFullTree = showFullTree;
+        this.showNodeValues = showNodeValues;
     }
     
     /**
@@ -377,11 +387,23 @@ class MinimaxTreeVisualizer {
      */
     visualizeTree(board, aiPlayer, maxDepth = 3) {
         this.clear();
-        this.tree = this.buildTree(board, aiPlayer, 0, maxDepth, true);
-        this.calculatePositions(this.tree, 0, -200, 600); // Increased width from 400 to 600
+        
+        if (this.showFullTree) {
+            // Build tree without pruning (standard minimax)
+            this.tree = this.buildTreeNoPruning(board, aiPlayer, 0, maxDepth, true);
+        } else {
+            // Build tree with alpha-beta pruning
+            this.tree = this.buildTree(board, aiPlayer, 0, maxDepth, true);
+        }
+        
+        this.calculatePositions(this.tree, 0, -200, 600);
         this.resetTransform();
         this.applyTransform();
-        this.drawTree(this.tree);
+        if (this.selectedPath && this.selectedPath.length > 0) {
+            this.drawTreeWithSelectedPath(this.tree);
+        } else {
+            this.drawTree(this.tree);
+        }
         this.resetTransform();
         this.drawLegend();
         this.drawControls();
@@ -404,7 +426,10 @@ class MinimaxTreeVisualizer {
             isTerminal: false,
             x: 0,
             y: 0,
-            id: Math.random().toString(36).substr(2, 9) // Add unique ID for node identification
+            id: Math.random().toString(36).substr(2, 9), // Add unique ID for node identification
+            prunedBoundValue: false, // Flag to indicate if using alpha/beta bound
+            boundType: null, // 'alpha' or 'beta'
+            boundValue: null // The bound value used
         };
         
         // Store AI player for later use
@@ -432,6 +457,7 @@ class MinimaxTreeVisualizer {
         // Generate children
         const availableMoves = GameUtils.getEmptyPositions(board);
         let bestValue = isMaximizing ? -Infinity : Infinity;
+        let hasUnprunedChildren = false;
         
         for (let i = 0; i < availableMoves.length; i++) {
             const move = availableMoves[i];
@@ -451,12 +477,15 @@ class MinimaxTreeVisualizer {
             
             node.children.push(child);
             
-            if (isMaximizing) {
-                bestValue = Math.max(bestValue, child.value);
-                alpha = Math.max(alpha, bestValue);
-            } else {
-                bestValue = Math.min(bestValue, child.value);
-                beta = Math.min(beta, bestValue);
+            if (!child.pruned) {
+                hasUnprunedChildren = true;
+                if (isMaximizing) {
+                    bestValue = Math.max(bestValue, child.value);
+                    alpha = Math.max(alpha, bestValue);
+                } else {
+                    bestValue = Math.min(bestValue, child.value);
+                    beta = Math.min(beta, bestValue);
+                }
             }
             
             // Alpha-beta pruning
@@ -476,6 +505,140 @@ class MinimaxTreeVisualizer {
                     });
                 }
                 break;
+            }
+        }
+        
+        // If all children were pruned, we need the actual minimax value for visualization
+        // but for the algorithm, we can use the bound. Let's calculate both.
+        if (!hasUnprunedChildren && node.children.length > 0) {
+            // For the algorithm: use the bound (this is what alpha-beta uses for decisions)
+            const algorithmValue = isMaximizing ? alpha : beta;
+            
+            // For visualization: calculate the actual minimax value
+            const actualValue = this.getActualMinimaxValue(board, aiPlayer, depth, maxDepth, isMaximizing);
+            
+            bestValue = algorithmValue; // Use bound for algorithm correctness
+            node.actualValue = actualValue; // Store actual value for display
+            node.prunedBoundValue = true;
+            node.boundType = isMaximizing ? 'alpha' : 'beta';
+            node.boundValue = algorithmValue;
+        }
+        
+        node.value = bestValue;
+        return node;
+    }
+    
+    /**
+     * Calculate the actual minimax value without pruning (for visualization)
+     */
+    getActualMinimaxValue(board, aiPlayer, depth, maxDepth, isMaximizing) {
+        // Check if this is a terminal state
+        const gameStatus = GameUtils.getGameStatus(board);
+        if (gameStatus.type !== 'ongoing') {
+            if (gameStatus.type === 'win') {
+                return gameStatus.winner === aiPlayer ? 1 : -1;
+            } else {
+                return 0; // Draw
+            }
+        }
+        
+        // If we've reached max depth, evaluate the position
+        if (depth >= maxDepth) {
+            return this.evaluatePosition(board, aiPlayer);
+        }
+        
+        // Standard minimax without pruning
+        const availableMoves = GameUtils.getEmptyPositions(board);
+        let bestValue = isMaximizing ? -Infinity : Infinity;
+        
+        for (let move of availableMoves) {
+            const newBoard = [...board];
+            newBoard[move] = isMaximizing ? aiPlayer : (aiPlayer === 'X' ? 'O' : 'X');
+            
+            const value = this.getActualMinimaxValue(
+                newBoard, 
+                aiPlayer, 
+                depth + 1, 
+                maxDepth, 
+                !isMaximizing
+            );
+            
+            if (isMaximizing) {
+                bestValue = Math.max(bestValue, value);
+            } else {
+                bestValue = Math.min(bestValue, value);
+            }
+        }
+        
+        return bestValue;
+    }
+
+    /**
+     * Evaluate a board position heuristically    /**
+     * Build the minimax tree structure without alpha-beta pruning
+     */
+    buildTreeNoPruning(board, aiPlayer, depth, maxDepth, isMaximizing, parentMove = null) {
+        const node = {
+            board: [...board],
+            depth: depth,
+            isMaximizing: isMaximizing,
+            children: [],
+            value: null,
+            move: parentMove,
+            alpha: -Infinity,
+            beta: Infinity,
+            pruned: false,
+            isTerminal: false,
+            x: 0,
+            y: 0,
+            id: Math.random().toString(36).substr(2, 9)
+        };
+        
+        // Store AI player for later use
+        this.aiPlayer = aiPlayer;
+        
+        // Check if this is a terminal state
+        const gameStatus = GameUtils.getGameStatus(board);
+        if (gameStatus.type !== 'ongoing') {
+            node.isTerminal = true;
+            if (gameStatus.type === 'win') {
+                node.value = gameStatus.winner === aiPlayer ? 1 : -1;
+            } else {
+                node.value = 0; // Draw
+            }
+            return node;
+        }
+        
+        // If we've reached max depth, evaluate the position
+        if (depth >= maxDepth) {
+            node.value = this.evaluatePosition(board, aiPlayer);
+            node.isTerminal = true;
+            return node;
+        }
+        
+        // Generate ALL children without pruning
+        const availableMoves = GameUtils.getEmptyPositions(board);
+        let bestValue = isMaximizing ? -Infinity : Infinity;
+        
+        for (let move of availableMoves) {
+            const newBoard = [...board];
+            newBoard[move] = isMaximizing ? aiPlayer : (aiPlayer === 'X' ? 'O' : 'X');
+            
+            const child = this.buildTreeNoPruning(
+                newBoard, 
+                aiPlayer, 
+                depth + 1, 
+                maxDepth, 
+                !isMaximizing, 
+                move
+            );
+            
+            node.children.push(child);
+            
+            if (isMaximizing) {
+                bestValue = Math.max(bestValue, child.value);
+            } else {
+                bestValue = Math.min(bestValue, child.value);
             }
         }
         
@@ -638,6 +801,15 @@ class MinimaxTreeVisualizer {
             this.ctx.stroke();
         }
         
+        // If this is a node using pruned bound value, add a special indicator
+        if (node.prunedBoundValue) {
+            this.ctx.strokeStyle = '#9B59B6'; // Purple for bound values
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, this.nodeRadius + 3, 0, 2 * Math.PI);
+            this.ctx.stroke();
+        }
+        
         // Draw node text
         this.ctx.fillStyle = textColor;
         this.ctx.font = 'bold 12px Arial';
@@ -647,7 +819,21 @@ class MinimaxTreeVisualizer {
         if (node.pruned) {
             this.ctx.fillText('✂', node.x, node.y);
         } else {
-            this.ctx.fillText(node.value !== null ? node.value.toFixed(1) : '?', node.x, node.y);
+            let displayValue;
+            if (this.showNodeValues) {
+                if (node.prunedBoundValue && node.actualValue !== undefined) {
+                    // Show actual minimax value for nodes with pruned children
+                    displayValue = node.actualValue.toFixed(1);
+                } else if (node.prunedBoundValue) {
+                    // Show bound information as fallback
+                    displayValue = `${node.boundType === 'alpha' ? '≤' : '≥'}${node.boundValue.toFixed(1)}`;
+                } else {
+                    displayValue = node.value !== null ? node.value.toFixed(1) : '?';
+                }
+            } else {
+                displayValue = node.isTerminal ? 'T' : (node.isMaximizing ? 'MAX' : 'MIN');
+            }
+            this.ctx.fillText(displayValue, node.x, node.y);
         }
         
         // Draw move label
@@ -708,6 +894,15 @@ class MinimaxTreeVisualizer {
             this.ctx.stroke();
         }
         
+        // If this is a node using pruned bound value, add a special indicator
+        if (node.prunedBoundValue) {
+            this.ctx.strokeStyle = '#9B59B6'; // Purple for bound values
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, this.nodeRadius + 3, 0, 2 * Math.PI);
+            this.ctx.stroke();
+        }
+        
         // Draw node text
         this.ctx.fillStyle = node.pruned ? '#999' : this.colors.text;
         this.ctx.font = 'bold 12px Arial';
@@ -717,7 +912,21 @@ class MinimaxTreeVisualizer {
         if (node.pruned) {
             this.ctx.fillText('✂', node.x, node.y);
         } else {
-            this.ctx.fillText(node.value !== null ? node.value.toFixed(1) : '?', node.x, node.y);
+            let displayValue;
+            if (this.showNodeValues) {
+                if (node.prunedBoundValue && node.actualValue !== undefined) {
+                    // Show actual minimax value for nodes with pruned children
+                    displayValue = node.actualValue.toFixed(1);
+                } else if (node.prunedBoundValue) {
+                    // Show bound information as fallback
+                    displayValue = `${node.boundType === 'alpha' ? '≤' : '≥'}${node.boundValue.toFixed(1)}`;
+                } else {
+                    displayValue = node.value !== null ? node.value.toFixed(1) : '?';
+                }
+            } else {
+                displayValue = node.isTerminal ? 'T' : (node.isMaximizing ? 'MAX' : 'MIN');
+            }
+            this.ctx.fillText(displayValue, node.x, node.y);
         }
         
         // Draw move label
@@ -774,10 +983,14 @@ class MinimaxTreeVisualizer {
         this.ctx.fill();
         this.ctx.fillStyle = this.colors.text;
         this.ctx.fillText('✂', legendX + 10, legendY + lineHeight * 4);
-        this.ctx.fillText('Pruned nodes (α-β)', legendX + 25, legendY + lineHeight * 4);
+        this.ctx.fillText(this.showFullTree ? 'No pruning shown' : 'Pruned nodes (α-β)', legendX + 25, legendY + lineHeight * 4);
         
         // Values explanation
-        this.ctx.fillText('Values: +1 = AI win, -1 = AI loss, 0 = draw', legendX, legendY + lineHeight * 5.5);
+        if (this.showNodeValues) {
+            this.ctx.fillText('Values: +1 = AI win, -1 = AI loss, 0 = draw', legendX, legendY + lineHeight * 5.5);
+        } else {
+            this.ctx.fillText('T = Terminal, MAX/MIN = Node type', legendX, legendY + lineHeight * 5.5);
+        }
         this.ctx.fillText('m# = move position (0-8)', legendX, legendY + lineHeight * 6.5);
     }
     
@@ -791,9 +1004,9 @@ class MinimaxTreeVisualizer {
         
         // Draw controls background
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        this.ctx.fillRect(controlsX - 10, controlsY - 10, 290, 120);
+        this.ctx.fillRect(controlsX - 10, controlsY - 10, 290, 140);
         this.ctx.strokeStyle = '#ccc';
-        this.ctx.strokeRect(controlsX - 10, controlsY - 10, 290, 120);
+        this.ctx.strokeRect(controlsX - 10, controlsY - 10, 290, 140);
         
         this.ctx.font = 'bold 14px Arial';
         this.ctx.fillStyle = this.colors.text;
@@ -806,6 +1019,7 @@ class MinimaxTreeVisualizer {
         this.ctx.fillText('🖱️ Double-click to reset view', controlsX, controlsY + lineHeight * 3.5);
         this.ctx.fillText('🖱️ Click node to see path', controlsX, controlsY + lineHeight * 4.5);
         this.ctx.fillText(`📏 Zoom: ${(this.scale * 100).toFixed(0)}%`, controlsX, controlsY + lineHeight * 5.5);
+        this.ctx.fillText(`🌳 Mode: ${this.showFullTree ? 'Full Tree' : 'With Pruning'}`, controlsX, controlsY + lineHeight * 6.5);
     }
     
     /**

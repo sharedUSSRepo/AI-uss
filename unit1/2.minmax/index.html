@@ -57,6 +57,14 @@
             
             <div class="tree-visualization">
                 <h3>Minimax Decision Tree</h3>
+                <div class="tree-controls">
+                    <label>
+                        <input type="checkbox" id="showFullTree"> Show full tree (no pruning)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showNodeValues" checked> Show node values
+                    </label>
+                </div>
                 <canvas id="treeCanvas"></canvas>
                 <div class="canvas-instructions">
                     <small>
@@ -65,6 +73,10 @@
                         🖱️ <strong>Double-click</strong> to reset view • 
                         🖱️ <strong>Click node</strong> to see path
                     </small>
+                    <div class="legend" style="margin-top: 10px; font-size: 11px; color: #666;">
+                        <div><span style="color: #2196F3;">●</span> MAX nodes | <span style="color: #FF5722;">●</span> MIN nodes | <span style="color: #4CAF50;">●</span> Terminal nodes</div>
+                        <div><span style="background: #f0f0f0; padding: 1px 3px;">✂</span> Pruned nodes | <span style="border: 2px solid #9B59B6; border-radius: 50%; padding: 1px 3px;">●</span> Bound values (≤α or ≥β)</div>
+                    </div>
                 </div>
                 
                 <div class="path-preview" id="pathPreview" style="display: none;">
