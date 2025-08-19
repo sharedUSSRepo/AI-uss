@@ -3,7 +3,8 @@ class AIPlayer {
     constructor(symbol, difficulty = 1) {
         this.symbol = symbol;
         this.difficulty = difficulty;
-        this.randomness = 0.25; // For easy mode
+        // Set randomness based on difficulty level
+        this.randomness = difficulty === 1 ? 0.5 : 0; // Easy: 50%, Hard: 0%
     }
     
     /**
@@ -145,5 +146,7 @@ class AIPlayer {
      */
     setDifficulty(difficulty) {
         this.difficulty = difficulty;
+        // Update randomness based on difficulty level
+        this.randomness = difficulty === 1 ? 0.5 : 0; // Easy: 50%, Hard: 0%
     }
 }
