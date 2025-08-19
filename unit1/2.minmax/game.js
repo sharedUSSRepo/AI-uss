@@ -10,6 +10,7 @@ class TicTacToeGame {
         this.ai = new AIPlayer(this.aiPlayer, this.difficulty);
         this.scores = { player: 0, ai: 0, draw: 0 };
         this.debugMode = true;
+        this.treeVisualizer = null;
         
         this.initializeGame();
     }
@@ -17,6 +18,97 @@ class TicTacToeGame {
     initializeGame() {
         this.bindEvents();
         this.updateDisplay();
+        
+        // Initialize tree visualizer after DOM is ready
+        setTimeout(() => {
+            this.treeVisualizer = new MinimaxTreeVisualizer('treeCanvas', 800, 400);
+            
+            // Set up node click callback
+            this.treeVisualizer.setNodeClickCallback((pathData) => {
+                this.showPathPreview(pathData);
+            });
+        }, 100);
+    }
+    
+    /**
+     * Show path preview when a tree node is clicked
+     */
+    showPathPreview(pathData) {
+        const pathPreview = document.getElementById('pathPreview');
+        const moveSequence = document.getElementById('moveSequence');
+        const boardPreview = document.getElementById('boardPreview');
+        
+        // Show the preview section
+        pathPreview.style.display = 'block';
+        
+        // Clear previous content
+        moveSequence.innerHTML = '';
+        boardPreview.innerHTML = '';
+        
+        // Display move sequence
+        if (pathData.moves.length === 0) {
+            moveSequence.innerHTML = '<div class="move-item">Root position - no moves yet</div>';
+        } else {
+            pathData.moves.forEach((move, index) => {
+                const moveDiv = document.createElement('div');
+                moveDiv.className = `move-item ${move.isAI ? 'ai-move' : 'player-move'}`;
+                moveDiv.innerHTML = `
+                    <span>${index + 1}. ${move.isAI ? 'AI' : 'Player'} plays ${move.player} at position ${move.move}</span>
+                `;
+                moveSequence.appendChild(moveDiv);
+            });
+        }
+        
+        // Display board preview
+        const previewBoard = document.createElement('div');
+        previewBoard.className = 'preview-board';
+        
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'preview-cell';
+            
+            if (pathData.board[i]) {
+                cell.textContent = pathData.board[i];
+                cell.classList.add(pathData.board[i].toLowerCase());
+                
+                // Check if this is a move from the selected path
+                const isPathMove = pathData.moves.some(move => move.move === i);
+                if (!isPathMove && pathData.board[i]) {
+                    // This is a move from the original game, dim it
+                    cell.classList.add('dim');
+                }
+            }
+            
+            previewBoard.appendChild(cell);
+        }
+        
+        boardPreview.appendChild(previewBoard);
+        
+        // Add node information
+        const nodeInfo = document.createElement('div');
+        nodeInfo.style.marginTop = '10px';
+        nodeInfo.style.fontSize = '12px';
+        nodeInfo.style.color = '#666';
+        nodeInfo.innerHTML = `
+            <strong>Node Value:</strong> ${pathData.node.value !== null ? pathData.node.value.toFixed(2) : 'N/A'}<br>
+            <strong>Node Type:</strong> ${pathData.node.isTerminal ? 'Terminal' : (pathData.node.isMaximizing ? 'MAX' : 'MIN')}<br>
+            <strong>Depth:</strong> ${pathData.node.depth}
+        `;
+        boardPreview.appendChild(nodeInfo);
+    }
+    
+    /**
+     * Clear the path preview display
+     */
+    clearPathPreview() {
+        const pathPreview = document.getElementById('pathPreview');
+        pathPreview.style.display = 'none';
+        
+        // Clear selected path in tree visualizer
+        if (this.treeVisualizer) {
+            this.treeVisualizer.selectedPath = null;
+            this.treeVisualizer.redraw();
+        }
     }
     
     bindEvents() {
@@ -31,6 +123,10 @@ class TicTacToeGame {
             this.ai = new AIPlayer(this.aiPlayer, this.difficulty);
         });
         
+        document.getElementById('clearPath').addEventListener('click', () => {
+            this.clearPathPreview();
+        });
+        
         document.querySelectorAll('.cell').forEach(cell => {
             cell.addEventListener('click', (e) => this.handleCellClick(e));
         });
@@ -42,6 +138,9 @@ class TicTacToeGame {
         this.gameActive = true;
         this.updateDisplay();
         this.updateGameStatus('Game started! Make your move.');
+        
+        // Clear any path preview
+        this.clearPathPreview();
         
         // If AI goes first, make AI move
         if (this.aiPlayer === 'X') {
@@ -79,7 +178,24 @@ class TicTacToeGame {
         if (!this.gameActive) return;
         
         const aiResult = this.ai.getMove(this.board);
+        
+        // Update debug info
         this.updateDebugInfo(aiResult.debugInfo);
+        
+        // Visualize the decision tree
+        if (this.treeVisualizer && aiResult.treeData) {
+            this.treeVisualizer.visualizeTree(
+                aiResult.treeData.board, 
+                aiResult.treeData.aiPlayer, 
+                3 // Max depth for visualization
+            );
+            
+            // Highlight the chosen path after a short delay
+            setTimeout(() => {
+                this.treeVisualizer.highlightBestPath(aiResult.treeData.bestMove);
+            }, 500);
+        }
+        
         this.makeMove(aiResult.move, this.aiPlayer);
     }
     

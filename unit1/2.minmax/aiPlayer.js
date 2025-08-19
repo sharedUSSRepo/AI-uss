@@ -3,7 +3,7 @@ class AIPlayer {
     constructor(symbol, difficulty = 1) {
         this.symbol = symbol;
         this.difficulty = difficulty;
-        this.randomness = 0.50; // For easy mode
+        this.randomness = 0.25; // For easy mode
     }
     
     /**
@@ -25,7 +25,8 @@ class AIPlayer {
         
         return {
             move: result.move,
-            debugInfo: this.generateDebugInfo(result, endTime - startTime)
+            debugInfo: this.generateDebugInfo(result, endTime - startTime),
+            treeData: result.treeData
         };
     }
     
@@ -72,7 +73,13 @@ class AIPlayer {
             score: selectedMove.score,
             allMoves: moves,
             wasRandomized: wasRandomized,
-            algorithm: 'minimax'
+            algorithm: 'minimax',
+            treeData: {
+                algorithm: 'minimax',
+                board: [...board],
+                aiPlayer: this.symbol,
+                bestMove: selectedMove.index
+            }
         };
     }
     
@@ -82,17 +89,18 @@ class AIPlayer {
      * @returns {Object} - Move result with additional info
      */
     getHardMove(board) {
-        const bestMove = MinimaxAlphaBeta.getBestMove(board, this.symbol);
+        const result = MinimaxAlphaBeta.getBestMoveWithTree(board, this.symbol);
         
         // Get additional statistics for debugging
         const stats = MinimaxAlphaBeta.getBestMoveWithStats(board, this.symbol);
         
         return {
-            move: bestMove,
+            move: result.move,
             score: stats.bestScore,
             nodesExplored: stats.nodesExplored,
             wasRandomized: false,
-            algorithm: 'minimax-alpha-beta'
+            algorithm: 'minimax-alpha-beta',
+            treeData: result.treeData
         };
     }
     

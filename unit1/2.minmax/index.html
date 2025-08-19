@@ -54,12 +54,35 @@
         <div class="debug-info">
             <h3>Debug Information</h3>
             <div id="debugInfo"></div>
+            
+            <div class="tree-visualization">
+                <h3>Minimax Decision Tree</h3>
+                <canvas id="treeCanvas"></canvas>
+                <div class="canvas-instructions">
+                    <small>
+                        🖱️ <strong>Drag</strong> to pan • 
+                        🖱️ <strong>Scroll</strong> to zoom • 
+                        🖱️ <strong>Double-click</strong> to reset view • 
+                        🖱️ <strong>Click node</strong> to see path
+                    </small>
+                </div>
+                
+                <div class="path-preview" id="pathPreview" style="display: none;">
+                    <h4>Selected Path Preview</h4>
+                    <div class="path-info">
+                        <div class="move-sequence" id="moveSequence"></div>
+                        <div class="board-preview" id="boardPreview"></div>
+                    </div>
+                    <button id="clearPath">Clear Selection</button>
+                </div>
+            </div>
         </div>
     </div>
     
     <script src="gameUtils.js"></script>
     <script src="minimax.js"></script>
     <script src="minimaxAlphaBeta.js"></script>
+    <script src="treeVisualizer.js"></script>
     <script src="aiPlayer.js"></script>
     <script src="game.js"></script>
 </body>

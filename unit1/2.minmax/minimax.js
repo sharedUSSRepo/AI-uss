@@ -68,6 +68,26 @@ class MinimaxAlgorithm {
     }
     
     /**
+     * Get best move with tree visualization data
+     * @param {Array} board - Current board state
+     * @param {string} aiPlayer - AI player symbol
+     * @returns {Object} - {move, treeData}
+     */
+    static getBestMoveWithTree(board, aiPlayer) {
+        const bestMove = this.getBestMove(board, aiPlayer);
+        
+        return {
+            move: bestMove,
+            treeData: {
+                algorithm: 'minimax',
+                board: [...board],
+                aiPlayer: aiPlayer,
+                bestMove: bestMove
+            }
+        };
+    }
+    
+    /**
      * Get all possible moves with their minimax scores
      * @param {Array} board - Current board state
      * @param {string} aiPlayer - AI player symbol

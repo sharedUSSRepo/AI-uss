@@ -80,6 +80,26 @@ class MinimaxAlphaBeta {
     }
     
     /**
+     * Get best move with tree visualization data
+     * @param {Array} board - Current board state
+     * @param {string} aiPlayer - AI player symbol
+     * @returns {Object} - {move, treeData}
+     */
+    static getBestMoveWithTree(board, aiPlayer) {
+        const bestMove = this.getBestMove(board, aiPlayer);
+        
+        return {
+            move: bestMove,
+            treeData: {
+                algorithm: 'minimax-alpha-beta',
+                board: [...board],
+                aiPlayer: aiPlayer,
+                bestMove: bestMove
+            }
+        };
+    }
+    
+    /**
      * Get performance statistics for the alpha-beta algorithm
      * @param {Array} board - Current board state
      * @param {string} aiPlayer - AI player symbol
