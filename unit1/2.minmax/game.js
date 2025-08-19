@@ -167,6 +167,15 @@ class TicTacToeGame {
             }
         });
         
+        // Horizontal spacing slider
+        document.getElementById('horizontalSpacing').addEventListener('input', (e) => {
+            const spacing = parseInt(e.target.value);
+            document.getElementById('spacingValue').textContent = spacing + 'px';
+            if (this.treeVisualizer) {
+                this.treeVisualizer.updateHorizontalSpacing(spacing);
+            }
+        });
+        
         document.querySelectorAll('.cell').forEach(cell => {
             cell.addEventListener('click', (e) => this.handleCellClick(e));
         });
