@@ -1,0 +1,13 @@
+{
+  "name": "chess",
+  "version": "1.0.0",
+  "description": "chess game to play against the computer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "alanSilvaaa",
+  "license": "ISC",
+  "packageManager": "pnpm@10.11.1"
+}
