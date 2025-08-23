@@ -13,6 +13,8 @@ The project is organized into units, each containing lectures and assignments. T
 /
 ├─ unit1
 │  ├─ 1.lecture1
+│  │  ├─ ...
+│  │  └─ README.md
 │  ├─ 2.lecture2
 │  └─ ...
 ├─ unit2
