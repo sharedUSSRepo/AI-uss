@@ -123,6 +123,23 @@
                         <label for="enable-benchmarking">Enable Benchmarking:</label>
                         <input type="checkbox" id="enable-benchmarking" checked>
                     </div>
+                    <div class="ai-setting">
+                        <label for="benchmark-games">Number of Games:</label>
+                        <select id="benchmark-games">
+                            <option value="1" selected>1 Game</option>
+                            <option value="5">5 Games</option>
+                            <option value="10">10 Games</option>
+                            <option value="25">25 Games</option>
+                            <option value="50">50 Games</option>
+                            <option value="100">100 Games</option>
+                        </select>
+                    </div>
+                    <div class="benchmarking-status">
+                        <div id="benchmark-status" class="benchmark-info">Ready to benchmark</div>
+                        <div id="benchmark-progress" class="benchmark-progress" style="display: none;">
+                            Game <span id="current-game">0</span> of <span id="total-games">0</span>
+                        </div>
+                    </div>
                     <div class="ai-vs-ai-controls">
                         <button id="start-ai-game-btn">Start AI Game</button>
                         <button id="pause-ai-game-btn" disabled>Pause</button>

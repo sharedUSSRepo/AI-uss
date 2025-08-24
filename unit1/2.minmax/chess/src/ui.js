@@ -34,6 +34,8 @@ export class ChessUI {
         // Benchmarking
         this.benchmarkingEnabled = true;
         this.currentGameId = null;
+        this.isMultiGameSession = false;
+        this.aiGameStartTime = null;
         
         this.initializeBoard();
         this.setupEventListeners();
@@ -661,7 +663,11 @@ export class ChessUI {
         
         this.aiGameRunning = true;
         this.aiGamePaused = false;
+        this.aiGameStartTime = Date.now();
         this.updateAIGameButtons();
+        
+        // Get number of games to play
+        const numGames = parseInt(document.getElementById('benchmark-games').value);
         
         // Start benchmarking if enabled
         if (this.benchmarkingEnabled) {
@@ -670,7 +676,18 @@ export class ChessUI {
             const whiteDepth = parseInt(document.getElementById('white-ai-depth').value);
             const blackDepth = parseInt(document.getElementById('black-ai-depth').value);
             
-            this.currentGameId = benchmarkLogger.startGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+            if (numGames > 1) {
+                // Multi-game session
+                this.isMultiGameSession = true;
+                this.currentGameId = benchmarkLogger.startMultiGameSession(numGames, whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+                this.updateProgressDisplay();
+            } else {
+                // Single game
+                this.isMultiGameSession = false;
+                this.currentGameId = benchmarkLogger.startGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+            }
+            
+            this.updateBenchmarkingStatus(`Starting game session...`, '');
         }
         
         // Start with white's move
@@ -693,18 +710,16 @@ export class ChessUI {
     }
 
     stopAIGame() {
-        // End benchmarking if enabled
-        if (this.benchmarkingEnabled && this.currentGameId) {
-            const gameResult = this.engine.gameStatus;
-            const totalMoves = this.moveHistory.length;
-            const gameDuration = Date.now() - (benchmarkLogger.gameStartTime || Date.now());
-            
-            benchmarkLogger.endGame(gameResult, totalMoves, gameDuration);
-            this.currentGameId = null;
+        // End benchmarking session if enabled
+        if (this.benchmarkingEnabled && this.isMultiGameSession) {
+            benchmarkLogger.endMultiGameSession();
+            this.updateBenchmarkingStatus('Multi-game session completed', 'saved');
+            this.hideProgressDisplay();
         }
         
         this.aiGameRunning = false;
         this.aiGamePaused = false;
+        this.isMultiGameSession = false;
         
         if (this.aiGameTimeout) {
             clearTimeout(this.aiGameTimeout);
@@ -714,8 +729,117 @@ export class ChessUI {
         this.updateAIGameButtons();
     }
 
+    async endCurrentGameAndStartNext() {
+        if (!this.benchmarkingEnabled) return;
+        
+        const gameEndTime = Date.now();
+        const gameDuration = gameEndTime - (this.aiGameStartTime || gameEndTime);
+        const totalMoves = this.moveHistory.length;
+        
+        // Determine game result
+        let gameResult = 'unknown';
+        if (this.engine.gameStatus === 'checkmate') {
+            gameResult = this.engine.currentPlayer === COLORS.WHITE ? 'black_wins' : 'white_wins';
+        } else if (this.engine.gameStatus === 'stalemate') {
+            gameResult = 'stalemate';
+        } else if (this.engine.gameStatus === 'draw') {
+            gameResult = 'draw';
+        }
+        
+        console.log(`Game ended: ${gameResult}, ${totalMoves} moves, ${gameDuration}ms`);
+        
+        // Update status
+        this.updateBenchmarkingStatus('Saving game data...', 'saving');
+        
+        try {
+            // End current game and get info about next game
+            const result = await benchmarkLogger.endGame(gameResult, totalMoves, gameDuration);
+            
+            if (result && result.filename) {
+                console.log(`Game data saved: ${result.filename}`);
+                this.updateBenchmarkingStatus(`Saved: ${result.filename}`, 'saved');
+                
+                if (result.hasMoreGames && this.aiGameRunning && !this.aiGamePaused) {
+                    // Start next game
+                    setTimeout(() => {
+                        this.startNextGame();
+                    }, 1000); // Brief pause between games
+                } else {
+                    // All games completed
+                    this.stopAIGame();
+                }
+            } else {
+                this.stopAIGame();
+            }
+        } catch (error) {
+            console.error('Error ending game:', error);
+            this.updateBenchmarkingStatus('Error saving game', 'error');
+            this.stopAIGame();
+        }
+    }
+
+    startNextGame() {
+        if (!this.isMultiGameSession || !this.aiGameRunning) return;
+        
+        // Reset game state
+        this.engine.reset();
+        this.selectedSquare = null;
+        this.highlightedSquares = [];
+        this.moveHistory = [];
+        this.isAIThinking = false;
+        
+        // Start next game in benchmark
+        const whiteHeuristic = document.getElementById('white-ai-heuristic').value;
+        const blackHeuristic = document.getElementById('black-ai-heuristic').value;
+        const whiteDepth = parseInt(document.getElementById('white-ai-depth').value);
+        const blackDepth = parseInt(document.getElementById('black-ai-depth').value);
+        
+        this.currentGameId = benchmarkLogger.startNextGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+        this.aiGameStartTime = Date.now();
+        
+        // Update progress display
+        this.updateProgressDisplay();
+        this.updateBenchmarkingStatus(`Playing game...`, '');
+        
+        // Update UI and start game
+        this.updateUI();
+        this.continueAIGame();
+    }
+
+    updateProgressDisplay() {
+        const progress = benchmarkLogger.getProgress();
+        const progressElement = document.getElementById('benchmark-progress');
+        const currentGameElement = document.getElementById('current-game');
+        const totalGamesElement = document.getElementById('total-games');
+        
+        if (progress.isMultiGame && progressElement) {
+            progressElement.style.display = 'block';
+            if (currentGameElement) currentGameElement.textContent = progress.currentGame;
+            if (totalGamesElement) totalGamesElement.textContent = progress.totalGames;
+        }
+    }
+
+    hideProgressDisplay() {
+        const progressElement = document.getElementById('benchmark-progress');
+        if (progressElement) {
+            progressElement.style.display = 'none';
+        }
+    }
+
+    updateBenchmarkingStatus(message, className = '') {
+        const statusElement = document.getElementById('benchmark-status');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = `benchmark-info ${className}`;
+        }
+    }
+
     continueAIGame() {
         if (!this.aiGameRunning || this.aiGamePaused || this.engine.gameStatus !== 'playing') {
+            // Game ended, handle benchmarking if enabled
+            if (this.benchmarkingEnabled && this.engine.gameStatus !== 'playing') {
+                this.endCurrentGameAndStartNext();
+            }
             return;
         }
         
@@ -729,7 +853,12 @@ export class ChessUI {
                     this.continueAIGame();
                 }, this.aiGameSpeed);
             } else {
-                this.stopAIGame();
+                // Game ended, handle benchmarking if enabled
+                if (this.benchmarkingEnabled && this.engine.gameStatus !== 'playing') {
+                    this.endCurrentGameAndStartNext();
+                } else {
+                    this.stopAIGame();
+                }
             }
         });
     }

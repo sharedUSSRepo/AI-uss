@@ -450,3 +450,38 @@ button:disabled {
         font-size: 24px;
     }
 }
+
+/* Benchmarking Styles */
+.benchmarking-status {
+    margin: 10px 0;
+    padding: 8px;
+    background-color: #3c3a35;
+    border-radius: 4px;
+    border-left: 3px solid #769656;
+}
+
+.benchmark-info {
+    font-size: 11px;
+    color: #ccc;
+    text-align: center;
+}
+
+.benchmark-info.saving {
+    color: #ffeb3b;
+}
+
+.benchmark-info.saved {
+    color: #90EE90;
+}
+
+.benchmark-info.error {
+    color: #ffcccb;
+}
+
+.benchmark-progress {
+    font-size: 11px;
+    color: #f0d9b5;
+    text-align: center;
+    margin-top: 5px;
+    font-weight: bold;
+}

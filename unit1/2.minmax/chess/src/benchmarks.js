@@ -9,6 +9,12 @@ export class BenchmarkLogger {
         this.currentGameId = null;
         this.gameStartTime = null;
         this.moveCounter = 0;
+        
+        // Multi-game benchmarking
+        this.isMultiGameSession = false;
+        this.multiGameData = [];
+        this.currentGameNumber = 0;
+        this.totalGames = 0;
     }
 
     /**
@@ -22,6 +28,56 @@ export class BenchmarkLogger {
         console.log(`Starting benchmark for game ${this.currentGameId}: White(${whiteHeuristic}, depth=${whiteDepth}) vs Black(${blackHeuristic}, depth=${blackDepth})`);
         
         return this.currentGameId;
+    }
+
+    /**
+     * Start a multi-game benchmarking session
+     */
+    startMultiGameSession(totalGames, whiteHeuristic, blackHeuristic, whiteDepth, blackDepth) {
+        this.isMultiGameSession = true;
+        this.multiGameData = [];
+        this.currentGameNumber = 0;
+        this.totalGames = totalGames;
+        
+        console.log(`Starting multi-game benchmark session: ${totalGames} games`);
+        console.log(`White(${whiteHeuristic}, depth=${whiteDepth}) vs Black(${blackHeuristic}, depth=${blackDepth})`);
+        
+        return this.startNextGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+    }
+
+    /**
+     * Start the next game in a multi-game session
+     */
+    startNextGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth) {
+        if (!this.isMultiGameSession) {
+            return this.startGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+        }
+        
+        this.currentGameNumber++;
+        this.gameData = []; // Reset for new game
+        
+        const gameId = this.startGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+        console.log(`Starting game ${this.currentGameNumber}/${this.totalGames}`);
+        
+        return gameId;
+    }
+
+    /**
+     * Check if there are more games to play in the session
+     */
+    hasMoreGames() {
+        return this.isMultiGameSession && this.currentGameNumber < this.totalGames;
+    }
+
+    /**
+     * Get current progress info
+     */
+    getProgress() {
+        return {
+            currentGame: this.currentGameNumber,
+            totalGames: this.totalGames,
+            isMultiGame: this.isMultiGameSession
+        };
     }
 
     /**
@@ -63,10 +119,10 @@ export class BenchmarkLogger {
     }
 
     /**
-     * End the current game session
+     * End the current game session and auto-save CSV
      */
-    endGame(gameResult, totalMoves, gameDuration) {
-        if (!this.currentGameId) return;
+    async endGame(gameResult, totalMoves, gameDuration) {
+        if (!this.currentGameId) return null;
 
         console.log(`Ending game ${this.currentGameId}: Result=${gameResult}, Moves=${totalMoves}, Duration=${gameDuration}ms`);
         
@@ -83,8 +139,106 @@ export class BenchmarkLogger {
             Object.assign(move, gameEndData);
         });
         
+        // Auto-save CSV for this game
+        const filename = await this.saveGameCSV();
+        
+        // Store game data for multi-game sessions
+        if (this.isMultiGameSession) {
+            this.multiGameData.push({
+                gameId: this.currentGameId,
+                gameData: [...this.gameData],
+                filename: filename
+            });
+        }
+        
         this.currentGameId = null;
         this.gameStartTime = null;
+        
+        return {
+            filename: filename,
+            hasMoreGames: this.hasMoreGames()
+        };
+    }
+
+    /**
+     * Save current game data to CSV and trigger download
+     */
+    async saveGameCSV() {
+        if (this.gameData.length === 0) {
+            console.log('No game data to save');
+            return null;
+        }
+
+        const csvContent = this.generateCSV();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const gameNumber = this.isMultiGameSession ? `_game${this.currentGameNumber}` : '';
+        const filename = `ai_benchmark_${timestamp}${gameNumber}.csv`;
+        
+        // Always download CSV immediately
+        this.downloadCSV(csvContent, filename);
+        console.log(`Auto-downloaded: ${filename}`);
+        
+        return filename;
+    }
+
+    /**
+     * End multi-game session
+     */
+    endMultiGameSession() {
+        if (!this.isMultiGameSession) return;
+        
+        console.log(`Multi-game session completed: ${this.currentGameNumber}/${this.totalGames} games`);
+        
+        // Generate summary report
+        const summaryData = this.generateSessionSummary();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const summaryFilename = `ai_benchmark_summary_${timestamp}.json`;
+        
+        // Download session summary
+        this.downloadJSON(summaryData, summaryFilename);
+        
+        // Reset session state
+        this.isMultiGameSession = false;
+        this.multiGameData = [];
+        this.currentGameNumber = 0;
+        this.totalGames = 0;
+        
+        return summaryFilename;
+    }
+
+    /**
+     * Generate session summary
+     */
+    generateSessionSummary() {
+        if (!this.isMultiGameSession || this.multiGameData.length === 0) {
+            return {};
+        }
+        
+        const games = this.multiGameData;
+        const results = games.map(g => g.gameData[g.gameData.length - 1]?.game_result).filter(r => r);
+        const durations = games.map(g => g.gameData[g.gameData.length - 1]?.game_duration_ms).filter(d => d);
+        const moveCounts = games.map(g => g.gameData[g.gameData.length - 1]?.total_moves).filter(m => m);
+        
+        const summary = {
+            sessionInfo: {
+                totalGames: this.currentGameNumber,
+                completedGames: games.length,
+                timestamp: new Date().toISOString()
+            },
+            results: {
+                whiteWins: results.filter(r => r === 'white_wins').length,
+                blackWins: results.filter(r => r === 'black_wins').length,
+                draws: results.filter(r => r === 'draw' || r === 'stalemate').length
+            },
+            stats: {
+                avgGameDuration: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
+                avgMovesPerGame: moveCounts.length > 0 ? moveCounts.reduce((a, b) => a + b, 0) / moveCounts.length : 0,
+                totalMoves: moveCounts.reduce((a, b) => a + b, 0)
+            },
+            files: games.map(g => g.filename)
+        };
+        
+        return summary;
     }
 
     /**
@@ -179,6 +333,23 @@ export class BenchmarkLogger {
     downloadCSV(content, filename) {
         // Create blob and download link
         const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    downloadJSON(data, filename) {
+        const jsonContent = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
         const link = document.createElement('a');
         
         if (link.download !== undefined) {
