@@ -25,6 +25,38 @@
                 <button id="undo-btn">Undo</button>
                 <button id="flip-board-btn">Flip Board</button>
             </div>
+
+            <div class="ai-controls">
+                <h4>AI Settings</h4>
+                <div class="ai-setting">
+                    <label for="ai-enabled">Play vs AI:</label>
+                    <input type="checkbox" id="ai-enabled" checked>
+                </div>
+                <div class="ai-setting">
+                    <label for="ai-color">AI Color:</label>
+                    <select id="ai-color">
+                        <option value="black">Black</option>
+                        <option value="white">White</option>
+                    </select>
+                </div>
+                <div class="ai-setting">
+                    <label for="ai-depth">AI Depth:</label>
+                    <select id="ai-depth">
+                        <option value="2">Easy (2)</option>
+                        <option value="3" selected>Normal (3)</option>
+                        <option value="4">Hard (4)</option>
+                        <option value="5">Expert (5)</option>
+                    </select>
+                </div>
+                <div class="ai-setting">
+                    <label for="ai-heuristic">AI Strategy:</label>
+                    <select id="ai-heuristic">
+                        <option value="material">Material Only</option>
+                        <option value="king_safety">King Safety</option>
+                        <option value="material_king" selected>Material + King Safety</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
         <div class="board-container">
@@ -47,6 +79,41 @@
                 <div class="captured-black">
                     <span>Captured by White:</span>
                     <div id="captured-black"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="debug-panel">
+            <h3>AI Debug Information</h3>
+            
+            <div class="debug-section">
+                <h4>Current Analysis</h4>
+                <div id="ai-status" class="debug-info">Waiting for AI move...</div>
+                <div class="debug-stats">
+                    <div>Nodes searched: <span id="nodes-searched">0</span></div>
+                    <div>Time taken: <span id="search-time">0ms</span></div>
+                    <div>Depth: <span id="search-depth">0</span></div>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <h4>Position Evaluation</h4>
+                <div id="position-evaluation" class="evaluation-grid">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <h4>Best Move Analysis</h4>
+                <div id="move-analysis" class="debug-info">
+                    <!-- Will show top 3 moves considered -->
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <h4>Heuristic Breakdown</h4>
+                <div id="heuristic-breakdown" class="debug-info">
+                    <!-- Will show detailed heuristic scores -->
                 </div>
             </div>
         </div>

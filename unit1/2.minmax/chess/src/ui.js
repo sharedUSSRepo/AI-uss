@@ -3,6 +3,7 @@
  */
 
 import { COLORS, PIECE_TYPES } from './board.js';
+import { ChessAI } from './ai.js';
 
 export class ChessUI {
     constructor(engine) {
@@ -11,6 +12,12 @@ export class ChessUI {
         this.highlightedSquares = [];
         this.flipped = false;
         this.moveHistory = [];
+        
+        // AI integration
+        this.ai = new ChessAI();
+        this.aiEnabled = true;
+        this.aiColor = COLORS.BLACK;
+        this.isAIThinking = false;
         
         this.initializeBoard();
         this.setupEventListeners();
@@ -49,15 +56,32 @@ export class ChessUI {
             this.selectedSquare = null;
             this.highlightedSquares = [];
             this.moveHistory = [];
+            this.isAIThinking = false;
             this.updateUI();
+            
+            // If AI plays white, make AI move
+            if (this.aiEnabled && this.aiColor === COLORS.WHITE) {
+                this.makeAIMove();
+            }
         });
 
         document.getElementById('undo-btn').addEventListener('click', () => {
+            if (this.isAIThinking) return;
+            
             const result = this.engine.undoMove();
             if (result.success) {
                 if (this.moveHistory.length > 0) {
                     this.moveHistory.pop();
                 }
+                
+                // If playing vs AI, undo AI's move too
+                if (this.aiEnabled && this.engine.moveHistory.length > 0) {
+                    const secondUndo = this.engine.undoMove();
+                    if (secondUndo.success && this.moveHistory.length > 0) {
+                        this.moveHistory.pop();
+                    }
+                }
+                
                 this.selectedSquare = null;
                 this.highlightedSquares = [];
                 this.updateUI();
@@ -68,9 +92,34 @@ export class ChessUI {
             this.flipped = !this.flipped;
             this.renderBoard();
         });
+
+        // AI controls
+        document.getElementById('ai-enabled').addEventListener('change', (e) => {
+            this.aiEnabled = e.target.checked;
+            if (this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
+                this.makeAIMove();
+            }
+        });
+
+        document.getElementById('ai-color').addEventListener('change', (e) => {
+            this.aiColor = e.target.value === 'white' ? COLORS.WHITE : COLORS.BLACK;
+            if (this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
+                this.makeAIMove();
+            }
+        });
+
+        document.getElementById('ai-depth').addEventListener('change', (e) => {
+            this.ai.updateSettings({ depth: parseInt(e.target.value) });
+        });
+
+        document.getElementById('ai-heuristic').addEventListener('change', (e) => {
+            this.ai.updateSettings({ heuristicId: e.target.value });
+        });
     }
 
     handleSquareClick(event) {
+        if (this.isAIThinking) return; // Don't allow moves while AI is thinking
+        
         const row = parseInt(event.currentTarget.dataset.row);
         const col = parseInt(event.currentTarget.dataset.col);
 
@@ -92,6 +141,12 @@ export class ChessUI {
                     
                     this.clearSelection();
                     this.updateUI();
+                    
+                    // Make AI move if enabled and game is still playing
+                    if (this.aiEnabled && this.engine.gameStatus === 'playing' && 
+                        this.engine.currentPlayer === this.aiColor) {
+                        this.makeAIMove();
+                    }
                 } else {
                     // Invalid move - try selecting the clicked square instead
                     this.selectSquare(row, col);
@@ -100,6 +155,54 @@ export class ChessUI {
         } else {
             // Select a piece
             this.selectSquare(row, col);
+        }
+    }
+
+    async makeAIMove() {
+        if (this.isAIThinking || this.engine.gameStatus !== 'playing') return;
+        
+        console.log('Making AI move for', this.engine.currentPlayer);
+        
+        this.isAIThinking = true;
+        this.updateGameInfo(); // Show "AI thinking"
+        
+        try {
+            // Use setTimeout to allow UI update before AI calculation
+            setTimeout(async () => {
+                try {
+                    const gameState = this.engine.getGameState();
+                    console.log('Game state passed to AI:', {
+                        currentPlayer: gameState.currentPlayer,
+                        legalMovesCount: gameState.legalMoves.length,
+                        gameStatus: gameState.gameStatus
+                    });
+
+                    const aiMove = this.ai.getBestMove(gameState);
+                    
+                    if (aiMove) {
+                        console.log('AI selected move:', aiMove);
+                        const result = this.engine.makeMove(aiMove.from, aiMove.to);
+                        if (result.success) {
+                            const algebraic = this.engine.moveToAlgebraic(aiMove, result.capturedPiece);
+                            this.moveHistory.push(algebraic);
+                            console.log('AI move successful:', algebraic);
+                        } else {
+                            console.error('AI move failed:', result.error);
+                        }
+                    } else {
+                        console.error('AI returned no move');
+                    }
+                } catch (innerError) {
+                    console.error('Inner AI Error:', innerError);
+                }
+                
+                this.isAIThinking = false;
+                this.updateUI();
+            }, 100);
+        } catch (error) {
+            console.error('AI Error:', error);
+            this.isAIThinking = false;
+            this.updateUI();
         }
     }
 
@@ -133,6 +236,7 @@ export class ChessUI {
         this.updateGameInfo();
         this.updateMoveList();
         this.updateCapturedPieces();
+        this.updateDebugPanel();
     }
 
     renderBoard() {
@@ -188,7 +292,14 @@ export class ChessUI {
 
         // Update current player
         const playerName = this.engine.currentPlayer === COLORS.WHITE ? 'White' : 'Black';
-        currentTurnElement.textContent = `${playerName} to move`;
+        
+        if (this.isAIThinking) {
+            currentTurnElement.textContent = 'AI is thinking...';
+        } else if (this.aiEnabled && this.engine.currentPlayer === this.aiColor) {
+            currentTurnElement.textContent = `${playerName} (AI) to move`;
+        } else {
+            currentTurnElement.textContent = `${playerName} to move`;
+        }
 
         // Update game status
         let statusText = 'Game in progress';
@@ -206,7 +317,8 @@ export class ChessUI {
         gameStatusElement.textContent = statusText;
 
         // Update button states
-        document.getElementById('undo-btn').disabled = this.engine.moveHistory.length === 0;
+        document.getElementById('undo-btn').disabled = this.engine.moveHistory.length === 0 || this.isAIThinking;
+        document.getElementById('new-game-btn').disabled = this.isAIThinking;
     }
 
     updateMoveList() {
@@ -298,5 +410,137 @@ export class ChessUI {
             [PIECE_TYPES.PAWN]: 'P'
         };
         return initials[pieceType] || '?';
+    }
+
+    // Update the debug panel with AI information
+    updateDebugPanel() {
+        // Update AI status
+        const aiStatusElement = document.getElementById('ai-status');
+        if (this.isAIThinking) {
+            if (window.debugInfo && window.debugInfo.currentMove) {
+                aiStatusElement.textContent = `Analyzing move: ${window.debugInfo.currentMove}`;
+            } else {
+                aiStatusElement.textContent = 'AI is thinking...';
+            }
+        } else if (this.aiEnabled && this.engine.currentPlayer === this.aiColor) {
+            aiStatusElement.textContent = 'Ready to move';
+        } else {
+            aiStatusElement.textContent = 'Waiting for human player';
+        }
+
+        // Update search stats
+        if (window.debugInfo && window.debugInfo.searchStats) {
+            const stats = window.debugInfo.searchStats;
+            document.getElementById('nodes-searched').textContent = stats.nodesSearched || 0;
+            document.getElementById('search-time').textContent = `${stats.timeElapsed || 0}ms`;
+            document.getElementById('search-depth').textContent = stats.depth || 0;
+        }
+
+        // Update position evaluation for all heuristics
+        this.updatePositionEvaluation();
+
+        // Update move analysis
+        this.updateMoveAnalysis();
+
+        // Update heuristic breakdown
+        this.updateHeuristicBreakdown();
+    }
+
+    updatePositionEvaluation() {
+        const evaluationElement = document.getElementById('position-evaluation');
+        const gameState = this.engine.getGameState();
+        
+        const heuristics = [
+            { id: 'material', name: 'Material', heuristic: window.HEURISTICS?.MATERIAL_ONLY },
+            { id: 'king_safety', name: 'King Safety', heuristic: window.HEURISTICS?.KING_SAFETY },
+            { id: 'material_king', name: 'Combined', heuristic: window.HEURISTICS?.MATERIAL_AND_KING_SAFETY }
+        ];
+
+        let html = '';
+        heuristics.forEach(h => {
+            if (h.heuristic) {
+                try {
+                    const whiteScore = h.heuristic.evaluate(gameState, COLORS.WHITE);
+                    const blackScore = h.heuristic.evaluate(gameState, COLORS.BLACK);
+                    
+                    html += `
+                        <div class="evaluation-item">
+                            <div class="evaluation-label">${h.name}</div>
+                            <div class="evaluation-scores">
+                                <div class="evaluation-score ${whiteScore > 0 ? 'positive' : 'negative'}">
+                                    W: ${whiteScore.toFixed(1)}
+                                </div>
+                                <div class="evaluation-score ${blackScore > 0 ? 'positive' : 'negative'}">
+                                    B: ${blackScore.toFixed(1)}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    html += `
+                        <div class="evaluation-item">
+                            <div class="evaluation-label">${h.name}</div>
+                            <div class="evaluation-score">Error</div>
+                        </div>
+                    `;
+                }
+            }
+        });
+
+        evaluationElement.innerHTML = html;
+    }
+
+    updateMoveAnalysis() {
+        const moveAnalysisElement = document.getElementById('move-analysis');
+        
+        if (window.debugInfo && window.debugInfo.movesCandidates && window.debugInfo.movesCandidates.length > 0) {
+            let html = '';
+            const topMoves = window.debugInfo.movesCandidates.slice(0, 5); // Show top 5 moves
+            
+            topMoves.forEach(candidate => {
+                html += `
+                    <div class="move-candidate ${candidate.isBest ? 'best' : ''}">
+                        <div class="move-notation">${candidate.move}</div>
+                        <div class="move-score">${candidate.score.toFixed(1)}</div>
+                    </div>
+                `;
+            });
+            
+            moveAnalysisElement.innerHTML = html;
+        } else {
+            moveAnalysisElement.innerHTML = '<div class="debug-info">No move analysis available</div>';
+        }
+    }
+
+    updateHeuristicBreakdown() {
+        const breakdownElement = document.getElementById('heuristic-breakdown');
+        
+        if (window.debugInfo && window.debugInfo.lastEvaluation) {
+            const eval_ = window.debugInfo.lastEvaluation;
+            let html = `<div class="heuristic-detail">`;
+            html += `<div class="debug-info"><strong>${eval_.heuristic}</strong></div>`;
+            html += `<div class="heuristic-component">
+                        <span class="heuristic-name">Total Score:</span>
+                        <span class="heuristic-value">${eval_.totalScore.toFixed(1)}</span>
+                     </div>`;
+            
+            if (eval_.breakdown) {
+                Object.entries(eval_.breakdown).forEach(([key, value]) => {
+                    if (typeof value === 'number') {
+                        html += `
+                            <div class="heuristic-component">
+                                <span class="heuristic-name">${key}:</span>
+                                <span class="heuristic-value">${value.toFixed(1)}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            html += `</div>`;
+            breakdownElement.innerHTML = html;
+        } else {
+            breakdownElement.innerHTML = '<div class="debug-info">No heuristic breakdown available</div>';
+        }
     }
 }
