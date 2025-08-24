@@ -183,13 +183,13 @@ button:disabled {
     transform: scale(1.1);
 }
 
-.piece.white {
+.piece.w {
     background-color: #f0f0f0;
     color: #333;
     border-color: #ccc;
 }
 
-.piece.black {
+.piece.b {
     background-color: #333;
     color: #fff;
     border-color: #666;
