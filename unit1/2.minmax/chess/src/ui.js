@@ -4,6 +4,7 @@
 
 import { COLORS, PIECE_TYPES } from './board.js';
 import { ChessAI } from './ai.js';
+import { benchmarkLogger } from './benchmarks.js';
 
 export class ChessUI {
     constructor(engine) {
@@ -29,6 +30,10 @@ export class ChessUI {
         this.aiGamePaused = false;
         this.aiGameSpeed = 1000; // milliseconds between moves
         this.aiGameTimeout = null;
+        
+        // Benchmarking
+        this.benchmarkingEnabled = true;
+        this.currentGameId = null;
         
         this.initializeBoard();
         this.setupEventListeners();
@@ -158,6 +163,10 @@ export class ChessUI {
             this.aiGameSpeed = parseInt(e.target.value);
         });
 
+        document.getElementById('enable-benchmarking').addEventListener('change', (e) => {
+            this.benchmarkingEnabled = e.target.checked;
+        });
+
         document.getElementById('start-ai-game-btn').addEventListener('click', () => {
             this.startAIGame();
         });
@@ -168,6 +177,14 @@ export class ChessUI {
 
         document.getElementById('stop-ai-game-btn').addEventListener('click', () => {
             this.stopAIGame();
+        });
+
+        document.getElementById('export-benchmark-btn').addEventListener('click', () => {
+            this.exportBenchmark();
+        });
+
+        document.getElementById('clear-benchmark-btn').addEventListener('click', () => {
+            this.clearBenchmark();
         });
     }
 
@@ -218,10 +235,12 @@ export class ChessUI {
         
         // Use provided AI instance or default to single AI for human vs AI mode
         const currentAI = aiInstance || this.ai;
+        const currentColor = this.engine.currentPlayer;
         
-        console.log('Making AI move for', this.engine.currentPlayer);
+        console.log('Making AI move for', currentColor);
         
         this.isAIThinking = true;
+        const moveStartTime = Date.now();
         this.updateGameInfo(); // Show "AI thinking"
         
         try {
@@ -237,6 +256,8 @@ export class ChessUI {
                         });
 
                         const aiMove = currentAI.getBestMove(gameState);
+                        const moveEndTime = Date.now();
+                        const timeTaken = moveEndTime - moveStartTime;
                         
                         if (aiMove) {
                             console.log('AI selected move:', aiMove);
@@ -245,6 +266,19 @@ export class ChessUI {
                                 const algebraic = this.engine.moveToAlgebraic(aiMove, result.capturedPiece);
                                 this.moveHistory.push(algebraic);
                                 console.log('AI move successful:', algebraic);
+                                
+                                // Log benchmarking data if enabled and in AI vs AI mode
+                                if (this.benchmarkingEnabled && this.gameMode === 'ai-vs-ai') {
+                                    this.logAIMoveData({
+                                        color: currentColor,
+                                        ai: currentAI,
+                                        move: aiMove,
+                                        algebraic: algebraic,
+                                        timeTaken: timeTaken,
+                                        capturedPiece: result.capturedPiece,
+                                        gameState: gameState
+                                    });
+                                }
                             } else {
                                 console.error('AI move failed:', result.error);
                             }
@@ -629,6 +663,16 @@ export class ChessUI {
         this.aiGamePaused = false;
         this.updateAIGameButtons();
         
+        // Start benchmarking if enabled
+        if (this.benchmarkingEnabled) {
+            const whiteHeuristic = document.getElementById('white-ai-heuristic').value;
+            const blackHeuristic = document.getElementById('black-ai-heuristic').value;
+            const whiteDepth = parseInt(document.getElementById('white-ai-depth').value);
+            const blackDepth = parseInt(document.getElementById('black-ai-depth').value);
+            
+            this.currentGameId = benchmarkLogger.startGame(whiteHeuristic, blackHeuristic, whiteDepth, blackDepth);
+        }
+        
         // Start with white's move
         this.continueAIGame();
     }
@@ -649,6 +693,16 @@ export class ChessUI {
     }
 
     stopAIGame() {
+        // End benchmarking if enabled
+        if (this.benchmarkingEnabled && this.currentGameId) {
+            const gameResult = this.engine.gameStatus;
+            const totalMoves = this.moveHistory.length;
+            const gameDuration = Date.now() - (benchmarkLogger.gameStartTime || Date.now());
+            
+            benchmarkLogger.endGame(gameResult, totalMoves, gameDuration);
+            this.currentGameId = null;
+        }
+        
         this.aiGameRunning = false;
         this.aiGamePaused = false;
         
@@ -690,5 +744,110 @@ export class ChessUI {
         stopBtn.disabled = !this.aiGameRunning;
         
         pauseBtn.textContent = this.aiGamePaused ? 'Resume' : 'Pause';
+    }
+
+    // Benchmarking methods
+    logAIMoveData(data) {
+        const { color, ai, move, algebraic, timeTaken, capturedPiece, gameState } = data;
+        
+        // Get move candidates from debug info
+        const moveCandidates = window.debugInfo?.movesCandidates || [];
+        const moveScores = {};
+        
+        // Build move scores dictionary
+        moveCandidates.forEach(candidate => {
+            moveScores[candidate.move] = candidate.score;
+        });
+        
+        // Get evaluation breakdown
+        const evaluationBreakdown = window.debugInfo?.lastEvaluation?.breakdown || {};
+        
+        // Calculate material balance
+        const materialBalance = this.calculateMaterialBalance();
+        
+        const benchmarkData = {
+            color: color,
+            heuristic: ai.heuristicId,
+            depth: ai.maxDepth,
+            chosenMove: `${this.coordsToAlgebraic(move.from[0], move.from[1])}-${this.coordsToAlgebraic(move.to[0], move.to[1])}`,
+            moveCandidates: moveCandidates,
+            moveScores: moveScores,
+            timeTaken: timeTaken,
+            nodesSearched: window.debugInfo?.searchStats?.nodesSearched || 0,
+            positionEvaluation: window.debugInfo?.lastEvaluation?.totalScore || 0,
+            gameStatus: gameState.gameStatus,
+            moveAlgebraic: algebraic,
+            capturedPiece: capturedPiece?.type || '',
+            isCheck: gameState.board?.isInCheck(color === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE) || false,
+            evaluationBreakdown: evaluationBreakdown,
+            boardFEN: this.generateSimpleFEN(),
+            materialBalance: materialBalance
+        };
+        
+        benchmarkLogger.logMove(benchmarkData);
+    }
+
+    calculateMaterialBalance() {
+        let whiteTotal = 0;
+        let blackTotal = 0;
+        const pieceValues = { 'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 0 };
+        
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = this.engine.board.getPiece(row, col);
+                if (piece) {
+                    const value = pieceValues[piece.type] || 0;
+                    if (piece.color === COLORS.WHITE) {
+                        whiteTotal += value;
+                    } else {
+                        blackTotal += value;
+                    }
+                }
+            }
+        }
+        
+        return whiteTotal - blackTotal;
+    }
+
+    generateSimpleFEN() {
+        // Simple FEN-like string (just piece placement)
+        let fen = '';
+        for (let row = 0; row < 8; row++) {
+            let emptyCount = 0;
+            for (let col = 0; col < 8; col++) {
+                const piece = this.engine.board.getPiece(row, col);
+                if (piece) {
+                    if (emptyCount > 0) {
+                        fen += emptyCount;
+                        emptyCount = 0;
+                    }
+                    fen += piece.color === COLORS.WHITE ? piece.type.toUpperCase() : piece.type;
+                } else {
+                    emptyCount++;
+                }
+            }
+            if (emptyCount > 0) {
+                fen += emptyCount;
+            }
+            if (row < 7) fen += '/';
+        }
+        return fen;
+    }
+
+    exportBenchmark() {
+        const stats = benchmarkLogger.getStats();
+        if (stats) {
+            console.log('Current benchmark stats:', stats);
+            benchmarkLogger.exportToCSV();
+        } else {
+            alert('No benchmark data to export');
+        }
+    }
+
+    clearBenchmark() {
+        if (confirm('Are you sure you want to clear all benchmark data?')) {
+            benchmarkLogger.clearData();
+            console.log('Benchmark data cleared');
+        }
     }
 }

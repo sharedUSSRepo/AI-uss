@@ -6,6 +6,7 @@ import { GameEngine } from './engine.js';
 import { ChessUI } from './ui.js';
 import { ChessAI } from './ai.js';
 import { HEURISTICS } from './heuristics.js';
+import { benchmarkLogger } from './benchmarks.js';
 
 class ChessGame {
     constructor() {
@@ -33,6 +34,7 @@ class ChessGame {
         window.chessGame = this;
         window.HEURISTICS = HEURISTICS;
         window.debugInfo = this.ai.debugInfo;
+        window.benchmarkLogger = benchmarkLogger;
         
         // Expose AI instances for debugging
         this.whiteAI = this.ui.whiteAI;
@@ -40,10 +42,12 @@ class ChessGame {
         window.chessGame.whiteAI = this.whiteAI;
         window.chessGame.blackAI = this.blackAI;
         
-        console.log('Chess game with AI vs AI functionality initialized!');
+        console.log('Chess game with AI vs AI functionality and benchmarking initialized!');
         console.log('Available heuristics:', Object.keys(HEURISTICS));
         console.log('Game modes: Human vs AI, AI vs AI');
+        console.log('Benchmarking: Use AI vs AI mode with benchmarking enabled to collect performance data');
         console.log('Use window.chessGame to access the game from console');
+        console.log('Use window.benchmarkLogger to access benchmarking functions');
         console.log('Debug panel shows real-time AI analysis');
     }
 
