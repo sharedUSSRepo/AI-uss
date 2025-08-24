@@ -110,6 +110,28 @@ button:disabled {
     margin-right: 5px;
 }
 
+.ai-vs-ai-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.ai-vs-ai-controls button {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+#human-ai-settings, #ai-vs-ai-settings {
+    margin-top: 15px;
+}
+
+#ai-vs-ai-settings h4 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
 .board-container {
     display: flex;
     justify-content: center;

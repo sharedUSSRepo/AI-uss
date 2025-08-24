@@ -34,8 +34,15 @@ class ChessGame {
         window.HEURISTICS = HEURISTICS;
         window.debugInfo = this.ai.debugInfo;
         
-        console.log('Chess game with AI initialized!');
+        // Expose AI instances for debugging
+        this.whiteAI = this.ui.whiteAI;
+        this.blackAI = this.ui.blackAI;
+        window.chessGame.whiteAI = this.whiteAI;
+        window.chessGame.blackAI = this.blackAI;
+        
+        console.log('Chess game with AI vs AI functionality initialized!');
         console.log('Available heuristics:', Object.keys(HEURISTICS));
+        console.log('Game modes: Human vs AI, AI vs AI');
         console.log('Use window.chessGame to access the game from console');
         console.log('Debug panel shows real-time AI analysis');
     }

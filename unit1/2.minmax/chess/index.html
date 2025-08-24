@@ -27,34 +27,103 @@
             </div>
 
             <div class="ai-controls">
-                <h4>AI Settings</h4>
+                <h4>Game Mode</h4>
                 <div class="ai-setting">
-                    <label for="ai-enabled">Play vs AI:</label>
-                    <input type="checkbox" id="ai-enabled" checked>
-                </div>
-                <div class="ai-setting">
-                    <label for="ai-color">AI Color:</label>
-                    <select id="ai-color">
-                        <option value="black">Black</option>
-                        <option value="white">White</option>
+                    <label for="game-mode">Mode:</label>
+                    <select id="game-mode">
+                        <option value="human-vs-ai" selected>Human vs AI</option>
+                        <option value="ai-vs-ai">AI vs AI</option>
                     </select>
                 </div>
-                <div class="ai-setting">
-                    <label for="ai-depth">AI Depth:</label>
-                    <select id="ai-depth">
-                        <option value="2">Easy (2)</option>
-                        <option value="3" selected>Normal (3)</option>
-                        <option value="4">Hard (4)</option>
-                        <option value="5">Expert (5)</option>
-                    </select>
+
+                <!-- Human vs AI Settings -->
+                <div id="human-ai-settings">
+                    <h4>Human vs AI</h4>
+                    <div class="ai-setting">
+                        <label for="ai-enabled">Enable AI:</label>
+                        <input type="checkbox" id="ai-enabled" checked>
+                    </div>
+                    <div class="ai-setting">
+                        <label for="ai-color">AI Color:</label>
+                        <select id="ai-color">
+                            <option value="black">Black</option>
+                            <option value="white">White</option>
+                        </select>
+                    </div>
+                    <div class="ai-setting">
+                        <label for="ai-depth">AI Depth:</label>
+                        <select id="ai-depth">
+                            <option value="2">Easy (2)</option>
+                            <option value="3" selected>Normal (3)</option>
+                            <option value="4">Hard (4)</option>
+                            <option value="5">Expert (5)</option>
+                        </select>
+                    </div>
+                    <div class="ai-setting">
+                        <label for="ai-heuristic">AI Strategy:</label>
+                        <select id="ai-heuristic">
+                            <option value="material">Material Only</option>
+                            <option value="king_safety">King Safety</option>
+                            <option value="material_king" selected>Material + King Safety</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="ai-setting">
-                    <label for="ai-heuristic">AI Strategy:</label>
-                    <select id="ai-heuristic">
-                        <option value="material">Material Only</option>
-                        <option value="king_safety">King Safety</option>
-                        <option value="material_king" selected>Material + King Safety</option>
-                    </select>
+
+                <!-- AI vs AI Settings -->
+                <div id="ai-vs-ai-settings" style="display: none;">
+                    <h4>White AI Settings</h4>
+                    <div class="ai-setting">
+                        <label for="white-ai-depth">White Depth:</label>
+                        <select id="white-ai-depth">
+                            <option value="2">Easy (2)</option>
+                            <option value="3" selected>Normal (3)</option>
+                            <option value="4">Hard (4)</option>
+                            <option value="5">Expert (5)</option>
+                        </select>
+                    </div>
+                    <div class="ai-setting">
+                        <label for="white-ai-heuristic">White Strategy:</label>
+                        <select id="white-ai-heuristic">
+                            <option value="material">Material Only</option>
+                            <option value="king_safety">King Safety</option>
+                            <option value="material_king" selected>Material + King Safety</option>
+                        </select>
+                    </div>
+
+                    <h4>Black AI Settings</h4>
+                    <div class="ai-setting">
+                        <label for="black-ai-depth">Black Depth:</label>
+                        <select id="black-ai-depth">
+                            <option value="2">Easy (2)</option>
+                            <option value="3" selected>Normal (3)</option>
+                            <option value="4">Hard (4)</option>
+                            <option value="5">Expert (5)</option>
+                        </select>
+                    </div>
+                    <div class="ai-setting">
+                        <label for="black-ai-heuristic">Black Strategy:</label>
+                        <select id="black-ai-heuristic">
+                            <option value="material" selected>Material Only</option>
+                            <option value="king_safety">King Safety</option>
+                            <option value="material_king">Material + King Safety</option>
+                        </select>
+                    </div>
+
+                    <h4>AI vs AI Controls</h4>
+                    <div class="ai-setting">
+                        <label for="ai-speed">Game Speed:</label>
+                        <select id="ai-speed">
+                            <option value="500">Fast (0.5s)</option>
+                            <option value="1000" selected>Normal (1s)</option>
+                            <option value="2000">Slow (2s)</option>
+                            <option value="5000">Very Slow (5s)</option>
+                        </select>
+                    </div>
+                    <div class="ai-vs-ai-controls">
+                        <button id="start-ai-game-btn">Start AI Game</button>
+                        <button id="pause-ai-game-btn" disabled>Pause</button>
+                        <button id="stop-ai-game-btn" disabled>Stop</button>
+                    </div>
                 </div>
             </div>
         </div>

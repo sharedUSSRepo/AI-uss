@@ -13,11 +13,22 @@ export class ChessUI {
         this.flipped = false;
         this.moveHistory = [];
         
-        // AI integration
+        // Game mode management
+        this.gameMode = 'human-vs-ai'; // 'human-vs-ai' or 'ai-vs-ai'
+        
+        // AI integration - single AI for human vs AI mode
         this.ai = new ChessAI();
         this.aiEnabled = true;
         this.aiColor = COLORS.BLACK;
         this.isAIThinking = false;
+        
+        // AI vs AI mode - separate AIs
+        this.whiteAI = new ChessAI({ maxDepth: 3, heuristicId: 'material_king' });
+        this.blackAI = new ChessAI({ maxDepth: 3, heuristicId: 'material' });
+        this.aiGameRunning = false;
+        this.aiGamePaused = false;
+        this.aiGameSpeed = 1000; // milliseconds between moves
+        this.aiGameTimeout = null;
         
         this.initializeBoard();
         this.setupEventListeners();
@@ -52,6 +63,7 @@ export class ChessUI {
 
     setupEventListeners() {
         document.getElementById('new-game-btn').addEventListener('click', () => {
+            this.stopAIGame();
             this.engine.reset();
             this.selectedSquare = null;
             this.highlightedSquares = [];
@@ -59,14 +71,16 @@ export class ChessUI {
             this.isAIThinking = false;
             this.updateUI();
             
-            // If AI plays white, make AI move
-            if (this.aiEnabled && this.aiColor === COLORS.WHITE) {
+            // Handle initial AI move based on game mode
+            if (this.gameMode === 'human-vs-ai' && this.aiEnabled && this.aiColor === COLORS.WHITE) {
                 this.makeAIMove();
+            } else if (this.gameMode === 'ai-vs-ai' && this.aiGameRunning) {
+                this.continueAIGame();
             }
         });
 
         document.getElementById('undo-btn').addEventListener('click', () => {
-            if (this.isAIThinking) return;
+            if (this.isAIThinking || this.aiGameRunning) return;
             
             const result = this.engine.undoMove();
             if (result.success) {
@@ -75,7 +89,7 @@ export class ChessUI {
                 }
                 
                 // If playing vs AI, undo AI's move too
-                if (this.aiEnabled && this.engine.moveHistory.length > 0) {
+                if (this.gameMode === 'human-vs-ai' && this.aiEnabled && this.engine.moveHistory.length > 0) {
                     const secondUndo = this.engine.undoMove();
                     if (secondUndo.success && this.moveHistory.length > 0) {
                         this.moveHistory.pop();
@@ -93,17 +107,24 @@ export class ChessUI {
             this.renderBoard();
         });
 
-        // AI controls
+        // Game mode selection
+        document.getElementById('game-mode').addEventListener('change', (e) => {
+            this.stopAIGame();
+            this.gameMode = e.target.value;
+            this.updateGameModeUI();
+        });
+
+        // Human vs AI controls
         document.getElementById('ai-enabled').addEventListener('change', (e) => {
             this.aiEnabled = e.target.checked;
-            if (this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
+            if (this.gameMode === 'human-vs-ai' && this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
                 this.makeAIMove();
             }
         });
 
         document.getElementById('ai-color').addEventListener('change', (e) => {
             this.aiColor = e.target.value === 'white' ? COLORS.WHITE : COLORS.BLACK;
-            if (this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
+            if (this.gameMode === 'human-vs-ai' && this.aiEnabled && this.engine.currentPlayer === this.aiColor && this.engine.gameStatus === 'playing') {
                 this.makeAIMove();
             }
         });
@@ -115,10 +136,44 @@ export class ChessUI {
         document.getElementById('ai-heuristic').addEventListener('change', (e) => {
             this.ai.updateSettings({ heuristicId: e.target.value });
         });
+
+        // AI vs AI controls
+        document.getElementById('white-ai-depth').addEventListener('change', (e) => {
+            this.whiteAI.updateSettings({ depth: parseInt(e.target.value) });
+        });
+
+        document.getElementById('white-ai-heuristic').addEventListener('change', (e) => {
+            this.whiteAI.updateSettings({ heuristicId: e.target.value });
+        });
+
+        document.getElementById('black-ai-depth').addEventListener('change', (e) => {
+            this.blackAI.updateSettings({ depth: parseInt(e.target.value) });
+        });
+
+        document.getElementById('black-ai-heuristic').addEventListener('change', (e) => {
+            this.blackAI.updateSettings({ heuristicId: e.target.value });
+        });
+
+        document.getElementById('ai-speed').addEventListener('change', (e) => {
+            this.aiGameSpeed = parseInt(e.target.value);
+        });
+
+        document.getElementById('start-ai-game-btn').addEventListener('click', () => {
+            this.startAIGame();
+        });
+
+        document.getElementById('pause-ai-game-btn').addEventListener('click', () => {
+            this.pauseAIGame();
+        });
+
+        document.getElementById('stop-ai-game-btn').addEventListener('click', () => {
+            this.stopAIGame();
+        });
     }
 
     handleSquareClick(event) {
-        if (this.isAIThinking) return; // Don't allow moves while AI is thinking
+        // Only allow human moves in human-vs-ai mode
+        if (this.gameMode !== 'human-vs-ai' || this.isAIThinking || this.aiGameRunning) return;
         
         const row = parseInt(event.currentTarget.dataset.row);
         const col = parseInt(event.currentTarget.dataset.col);
@@ -158,8 +213,11 @@ export class ChessUI {
         }
     }
 
-    async makeAIMove() {
+    async makeAIMove(aiInstance = null) {
         if (this.isAIThinking || this.engine.gameStatus !== 'playing') return;
+        
+        // Use provided AI instance or default to single AI for human vs AI mode
+        const currentAI = aiInstance || this.ai;
         
         console.log('Making AI move for', this.engine.currentPlayer);
         
@@ -168,41 +226,45 @@ export class ChessUI {
         
         try {
             // Use setTimeout to allow UI update before AI calculation
-            setTimeout(async () => {
-                try {
-                    const gameState = this.engine.getGameState();
-                    console.log('Game state passed to AI:', {
-                        currentPlayer: gameState.currentPlayer,
-                        legalMovesCount: gameState.legalMoves.length,
-                        gameStatus: gameState.gameStatus
-                    });
+            return new Promise((resolve) => {
+                setTimeout(async () => {
+                    try {
+                        const gameState = this.engine.getGameState();
+                        console.log('Game state passed to AI:', {
+                            currentPlayer: gameState.currentPlayer,
+                            legalMovesCount: gameState.legalMoves.length,
+                            gameStatus: gameState.gameStatus
+                        });
 
-                    const aiMove = this.ai.getBestMove(gameState);
-                    
-                    if (aiMove) {
-                        console.log('AI selected move:', aiMove);
-                        const result = this.engine.makeMove(aiMove.from, aiMove.to);
-                        if (result.success) {
-                            const algebraic = this.engine.moveToAlgebraic(aiMove, result.capturedPiece);
-                            this.moveHistory.push(algebraic);
-                            console.log('AI move successful:', algebraic);
+                        const aiMove = currentAI.getBestMove(gameState);
+                        
+                        if (aiMove) {
+                            console.log('AI selected move:', aiMove);
+                            const result = this.engine.makeMove(aiMove.from, aiMove.to);
+                            if (result.success) {
+                                const algebraic = this.engine.moveToAlgebraic(aiMove, result.capturedPiece);
+                                this.moveHistory.push(algebraic);
+                                console.log('AI move successful:', algebraic);
+                            } else {
+                                console.error('AI move failed:', result.error);
+                            }
                         } else {
-                            console.error('AI move failed:', result.error);
+                            console.error('AI returned no move');
                         }
-                    } else {
-                        console.error('AI returned no move');
+                    } catch (innerError) {
+                        console.error('Inner AI Error:', innerError);
                     }
-                } catch (innerError) {
-                    console.error('Inner AI Error:', innerError);
-                }
-                
-                this.isAIThinking = false;
-                this.updateUI();
-            }, 100);
+                    
+                    this.isAIThinking = false;
+                    this.updateUI();
+                    resolve();
+                }, 100);
+            });
         } catch (error) {
             console.error('AI Error:', error);
             this.isAIThinking = false;
             this.updateUI();
+            return Promise.resolve();
         }
     }
 
@@ -542,5 +604,91 @@ export class ChessUI {
         } else {
             breakdownElement.innerHTML = '<div class="debug-info">No heuristic breakdown available</div>';
         }
+    }
+
+    // AI vs AI Game Control Methods
+    updateGameModeUI() {
+        const humanAISettings = document.getElementById('human-ai-settings');
+        const aiVsAISettings = document.getElementById('ai-vs-ai-settings');
+        
+        if (this.gameMode === 'human-vs-ai') {
+            humanAISettings.style.display = 'block';
+            aiVsAISettings.style.display = 'none';
+        } else {
+            humanAISettings.style.display = 'none';
+            aiVsAISettings.style.display = 'block';
+        }
+        
+        this.updateUI();
+    }
+
+    startAIGame() {
+        if (this.gameMode !== 'ai-vs-ai') return;
+        
+        this.aiGameRunning = true;
+        this.aiGamePaused = false;
+        this.updateAIGameButtons();
+        
+        // Start with white's move
+        this.continueAIGame();
+    }
+
+    pauseAIGame() {
+        this.aiGamePaused = !this.aiGamePaused;
+        
+        if (this.aiGameTimeout) {
+            clearTimeout(this.aiGameTimeout);
+            this.aiGameTimeout = null;
+        }
+        
+        this.updateAIGameButtons();
+        
+        if (!this.aiGamePaused && this.aiGameRunning) {
+            this.continueAIGame();
+        }
+    }
+
+    stopAIGame() {
+        this.aiGameRunning = false;
+        this.aiGamePaused = false;
+        
+        if (this.aiGameTimeout) {
+            clearTimeout(this.aiGameTimeout);
+            this.aiGameTimeout = null;
+        }
+        
+        this.updateAIGameButtons();
+    }
+
+    continueAIGame() {
+        if (!this.aiGameRunning || this.aiGamePaused || this.engine.gameStatus !== 'playing') {
+            return;
+        }
+        
+        const currentAI = this.engine.currentPlayer === COLORS.WHITE ? this.whiteAI : this.blackAI;
+        
+        // Make AI move
+        this.makeAIMove(currentAI).then(() => {
+            // Schedule next move if game is still running
+            if (this.aiGameRunning && !this.aiGamePaused && this.engine.gameStatus === 'playing') {
+                this.aiGameTimeout = setTimeout(() => {
+                    this.continueAIGame();
+                }, this.aiGameSpeed);
+            } else {
+                this.stopAIGame();
+            }
+        });
+    }
+
+    updateAIGameButtons() {
+        const startBtn = document.getElementById('start-ai-game-btn');
+        const pauseBtn = document.getElementById('pause-ai-game-btn');
+        const stopBtn = document.getElementById('stop-ai-game-btn');
+        
+        startBtn.disabled = this.aiGameRunning;
+        pauseBtn.disabled = !this.aiGameRunning;
+        stopBtn.disabled = !this.aiGameRunning;
+        
+        pauseBtn.textContent = this.aiGamePaused ? 'Resume' : 'Pause';
     }
 }
