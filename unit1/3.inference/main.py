@@ -19,7 +19,7 @@ KB = [
     [pos7, pos8, pos9],
 ]
 
-def move(x: int, y: int):
+def move(x: int, y: int, mov: str):
     """
     Move the robot to a new position.
 
@@ -35,10 +35,20 @@ def move(x: int, y: int):
     None
     """
 
-    KB[x][y][0] = 1  # Mark the cell as visited
+    next_pos = [] # Initialize empty array
+    if ((y - 1 >= 0) and mov == "up"): next_pos = (x, y-1)
+    if (x - 1 >= 0) and mov == "left": next_pos = (x-1, y)
+    if (y + 1 < COL) and mov == "down": next_pos = (x, y+1)
+    if (x + 1 < ROW) and mov == "right": next_pos = (x+1, y)
+
+    print(next_pos)
+    KB[next_pos[1]][next_pos[0]][0] = 1  # Move the robot to that cell
+    KB[x][y][0] = 0 # Clear the current robot cell
     visited.append((x, y))
 
-def explore_neighbors(x: int, y: int):
+    # print(KB)
+
+def neighbors_coords(x: int, y: int):
     """
     Get the neighboring cells from the knowledge base (KB) for a given coordinate.
 
@@ -59,11 +69,11 @@ def explore_neighbors(x: int, y: int):
 
     neighbors = []
 
-    if not (y-1 < 0): neighbors.append(KB[x][y-1]) # Left
-    if not (x-1 < 0): neighbors.append(KB[x-1][y]) # Up
-    if not (y+1 >= COL): neighbors.append(KB[x][y+1]) # Right
-    if not (x+1 >= ROW): neighbors.append(KB[x+1][y]) # Down
-
+    if y - 1 >= 0: neighbors.append((x, y-1)) # Left
+    if x - 1 >= 0: neighbors.append((x-1, y)) # Up
+    if y + 1 < COL: neighbors.append((x, y+1)) # Right
+    if x + 1 < ROW: neighbors.append((x+1, y)) # Down
     return neighbors
 
-print(explore_neighbors(1, 1))
+# print(neighbors_coords(1, 1))
+move(0, 0, 'right')
