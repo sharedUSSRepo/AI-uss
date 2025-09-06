@@ -1,24 +1,16 @@
 [project]
-name = "ai"
+name = "pddl-solver"
 version = "0.1.0"
-description = "Add your description here"
+description = "PDDL planning problem solver using unified-planning"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "cairosvg>=2.8.2",
-    "pillow>=11.3.0",
-    "pygame>=2.6.1",
-    "pygame-ce>=2.5.5",
-    "typer>=0.16.0",
+    "typer>=0.17.3",
     "unified-planning[pyperplan]>=1.2.0",
 ]
 
 [project.scripts]
 pddl-solver = "pddl_solver.cli:main"
-# wumpus = "unit1.3_inference.wumpus_world.cli.solo_game:main"
-
-[tool.hatch.build]
-skip = true
 
 [build-system]
 requires = ["hatchling"]
