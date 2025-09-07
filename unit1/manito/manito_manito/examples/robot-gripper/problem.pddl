@@ -15,6 +15,7 @@
     (at redCube table)
     (at blueCube table)
     (at manito table)
+    (down manito)
     (empty manito)
   )
   

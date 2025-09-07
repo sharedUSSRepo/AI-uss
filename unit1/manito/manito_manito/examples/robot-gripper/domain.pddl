@@ -10,6 +10,8 @@
     (above ?x - entity ?y - entity)
     (empty ?r - robot)
     (holding ?r - robot ?o - object)
+    (up ?r - robot)
+    (down ?r - robot)
   )
   
   (:action pick
@@ -18,13 +20,16 @@
       (at ?o ?l)
       (above ?r ?o)
       (empty ?r)
+      (up ?r)
     )
     :effect (and 
-      (not (at ?o ?l))
+      (down ?r)
+      (not (up ?r))
       (not (empty ?r))
       (not (above ?o ?l))
       (above ?o ?r)
       (holding ?r ?o)
+      (up ?r)
     )
   )
   
@@ -33,8 +38,11 @@
     :precondition (and 
       (at ?r ?l)
       (holding ?r ?o)
+      (up ?r)
     )
     :effect (and 
+      (down ?r)
+      (not (up ?r))
       (at ?o ?l)
       (empty ?r)
       (not (holding ?r ?o))
@@ -45,8 +53,12 @@
   
   (:action move
     :parameters (?r - robot ?from - entity ?to - entity)
-    :precondition (at ?r ?from)
+    :precondition (and
+      (at ?r ?from)
+    )
     :effect (and 
+      (up ?r)
+      (not (down ?r))
       (at ?r ?to)
       (not (at ?r ?from))
       (above ?r ?to) 
