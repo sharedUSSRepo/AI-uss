@@ -22,6 +22,8 @@
     :effect (and 
       (not (at ?o ?l))
       (not (empty ?r))
+      (not (above ?o ?l))
+      (above ?o ?r)
       (holding ?r ?o)
     )
   )
@@ -36,6 +38,7 @@
       (at ?o ?l)
       (empty ?r)
       (not (holding ?r ?o))
+      (not (above ?o ?r))
       (above ?o ?l)
     )
   )
