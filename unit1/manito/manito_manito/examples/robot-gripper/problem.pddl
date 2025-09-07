@@ -2,21 +2,23 @@
   (:domain robot-gripper)
   
   (:objects
-    robot1 - robot
-    gripper1 - gripper
+    manito - robot
     redCube - object
     blueCube - object
-    table box - location
+    table - location
   )
-  
+
   (:init
-    (at robot1 table)
+    (above redCube table)
+    (above blueCube table)
+    (above manito table)
     (at redCube table)
-    (empty robot1)
-    (attached gripper1 robot1)
+    (at blueCube table)
+    (at manito table)
+    (empty manito)
   )
   
   (:goal
-    (holding robot1 redCube)
+    (above blueCube redCube)
   )
 )

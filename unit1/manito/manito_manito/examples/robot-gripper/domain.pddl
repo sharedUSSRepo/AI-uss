@@ -4,32 +4,30 @@
   (:types
     robot gripper object location - entity
   )
-  
+
   (:predicates
-    (at ?x - entity ?l - location)
-    (atObject ?x - entity ?o - object)
-    (upObject ?r - robot ?o - object)
-    (holding ?r - robot ?o - object)
+    (at ?x - entity ?l - entity)
+    (above ?x - entity ?y - entity)
     (empty ?r - robot)
-    (attached ?g - gripper ?r - robot)
+    (holding ?r - robot ?o - object)
   )
   
   (:action pick
-    :parameters (?r - robot ?o - object ?l - location ?o - object)
+    :parameters (?r - robot ?o - object ?l - entity)
     :precondition (and 
-      (upObject ?r ?o)
       (at ?o ?l)
+      (above ?r ?o)
       (empty ?r)
     )
     :effect (and 
-      (holding ?r ?o)
       (not (at ?o ?l))
       (not (empty ?r))
+      (holding ?r ?o)
     )
   )
   
   (:action drop
-    :parameters (?r - robot ?o - object ?l - location)
+    :parameters (?r - robot ?o - object ?l - entity)
     :precondition (and 
       (at ?r ?l)
       (holding ?r ?o)
@@ -38,24 +36,18 @@
       (at ?o ?l)
       (empty ?r)
       (not (holding ?r ?o))
+      (above ?o ?l)
     )
   )
   
   (:action move
-    :parameters (?r - robot ?from - location ?to - location)
+    :parameters (?r - robot ?from - entity ?to - entity)
     :precondition (at ?r ?from)
     :effect (and 
       (at ?r ?to)
       (not (at ?r ?from))
-    )
-  )
-
-  (:action moveToObject
-    :parameters (?r - robot ?from - location ?to - object)
-    :precondition (at ?r ?from)
-    :effect (and 
-      (atObject ?r ?to)
-      (not (atObject ?r ?from))
+      (above ?r ?to) 
+      (not (above ?r ?from))
     )
   )
 )
